@@ -14,6 +14,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ScrollView
+import com.spacelens.app.BuildConfig
 import com.spacelens.app.core.Fmt
 import com.spacelens.app.core.ScanSummary
 import kotlin.math.max
@@ -212,6 +213,10 @@ class OverviewPage(context: Context) : FrameLayout(context) {
             // ---- 上次扫描 ----
             val sum = RectF(margin, y, w - margin, y + summaryH)
             drawSummary(canvas, sum, p)
+
+            val footer = Draw.text(context, 11f, p.muted, align = Paint.Align.CENTER)
+            canvas.drawText("文件管家 v" + BuildConfig.VERSION_NAME + " · HU4222",
+                    w / 2f, sum.bottom + 38f * d, footer)
         }
 
         private fun drawHero(canvas: Canvas, r: RectF, p: Palette) {

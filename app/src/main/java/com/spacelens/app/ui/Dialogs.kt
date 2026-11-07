@@ -125,10 +125,10 @@ object Dialogs {
     fun showAbout(activity: Activity) {
         showMessage(
                 activity,
-                "关于 SpaceLens",
-                "SpaceLens 空间透镜\n版本 ${BuildConfig.VERSION_NAME}（versionCode ${BuildConfig.VERSION_CODE}）\n\n" +
-                        "把手机存储实时画成矩形树图，并测出闪存读写速度。\n" +
-                        "纯本地运行，不申请 INTERNET 权限。删除只走回收站：多选 + 预览 + 二次确认，可撤销 / 还原；不提供重命名 / 移动。\n\n" +
+                "关于 文件管家",
+                "文件管家\n版本 ${BuildConfig.VERSION_NAME}（versionCode ${BuildConfig.VERSION_CODE}）\n\n" +
+                        "空间 / 搜索 / 清理 / 局域网互传。\n" +
+                        "传输只监听本机局域网，不访问公网。删除只走回收站，可恢复；应用缓存清理需要 Shizuku。\n\n" +
                         "设计与实现：HU4222\n" +
                         "构建：Kotlin + 系统 View 自绘 · 零第三方 UI 库",
         )
@@ -138,8 +138,8 @@ object Dialogs {
         showMessage(
                 activity,
                 "版本信息",
-                "SpaceLens 空间透镜\n版本 ${BuildConfig.VERSION_NAME}\nversionCode ${BuildConfig.VERSION_CODE}\n" +
-                        "minSdk 24 / targetSdk 34\n\nHU4222",
+                "文件管家\n版本 ${BuildConfig.VERSION_NAME}\nversionCode ${BuildConfig.VERSION_CODE}\n" +
+                        "minSdk 26 / targetSdk 34\n\nHU4222",
         )
     }
 

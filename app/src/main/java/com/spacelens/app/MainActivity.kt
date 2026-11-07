@@ -337,6 +337,7 @@ class MainActivity : Activity() {
             }
             1 -> searchPage.onShown()
             2 -> cleanPage.onShown()
+            3 -> transferPage.onShown()
         }
         updateDetail()
     }
@@ -353,6 +354,7 @@ class MainActivity : Activity() {
             }
             1 -> searchPage.onShown()
             2 -> cleanPage.onShown()
+            3 -> transferPage.onShown()
         }
         updateDetail()
     }
@@ -526,6 +528,7 @@ class MainActivity : Activity() {
         updateMine()
         updateOverview()
         if (::cleanPage.isInitialized) cleanPage.onResume()
+        if (::transferPage.isInitialized) transferPage.onResume()
         if (pendingScan) {
             if (hasAllFilesAccess() || hasReadAccess()) {
                 pendingScan = false
