@@ -237,7 +237,8 @@ class HttpServer(
                 "/api/upload" -> return apiUploadStream(input, contentLength, out, query, localUi)
                 "/api/clip" -> return apiClipAdd(data, out)
                 "/api/clip/delete" -> return apiClipDel(data, out)
-                "/api/delete" -> return apiDelete(data, out, localUi)
+                "/api/delete" -> return send(out, 403, "application/json; charset=utf-8",
+                    """{"ok":false,"error":"传输接口不提供删除，请使用 App 内的回收站","code":"DISABLED"}""".toByteArray())
                 "/api/mkdir" -> return apiMkdir(data, out, localUi)
                 "/api/rename" -> return apiRename(data, out, localUi)
                 "/api/zip" -> return apiZip(data, out)
@@ -574,24 +575,6 @@ class HttpServer(
 
     /** 本机界面可以操作整机；局域网来的源端只能改接收目录（BUG-08）。 */
     private fun writeRoot(localUi: Boolean): File = if (localUi) rootDir else recvDir
-
-    private fun apiDelete(data: JSONObject, out: OutputStream, localUi: Boolean) {
-        val paths = data.optJSONArray("paths")
-        if (paths == null) return sendJson(out, JSONObject().put("ok", false).put("error", "缺少路径"))
-        var all = true
-        var blocked = 0
-        for (i in 0 until paths.length()) {
-            // 严格解析：不在根目录内的路径返回 null（以前会回退成根目录，等于把整个接收目录删掉）
-            val f = resolveWritePath(paths.optString(i), localUi)
-            if (f == null || f.canonicalPath == writeRoot(localUi).canonicalPath) {
-                blocked++
-                all = false
-                continue
-            }
-            all = all and f.deleteRecursively()
-        }
-        sendJson(out, JSONObject().put("ok", all).put("blocked", blocked))
-    }
 
     /** 只允许写入根内部的路径；越界返回 null。 */
     private fun resolveWritePath(target: String?, localUi: Boolean): File? {

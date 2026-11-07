@@ -2210,7 +2210,6 @@
         zipSelected(items.filter((x) => !x.dir));
         break;
       }
-      case 'selDelete': deleteSelected(); break;
       default: break;
     }
   });
@@ -2347,20 +2346,6 @@
     const url = '/api/zip?paths=' + encodeURIComponent(JSON.stringify(chosen.map((x) => x.path)));
     triggerDownload(url);
     toast('正在打包，稍候…');
-  }
-
-  async function deleteSelected() {
-    const items = Array.from(state.sel.values());
-    if (!items.length) return;
-    if (!confirm(`删除 ${items.length} 项到回收站？\n（可在接收端回收站里还原）`)) return;
-    try {
-      await api('/api/delete', { method: 'POST', body: JSON.stringify({ paths: items.map((x) => x.path) }) });
-      toast('已移入回收站');
-      exitSelect();
-      await loadList(state.path);
-    } catch (e) {
-      toast(e.message, true);
-    }
   }
 
   /* ---------------- 搜索 ---------------- */
