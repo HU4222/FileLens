@@ -561,6 +561,12 @@ class MainActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == TransferPage.REQ_FILE) {
+            if (::transferPage.isInitialized) {
+                transferPage.onActivityResult(requestCode, resultCode, data)
+            }
+            return
+        }
         if (requestCode == SystemTrash.REQUEST) {
             android.util.Log.i("SpaceLens", "trash system result=" + resultCode)
             startScan()

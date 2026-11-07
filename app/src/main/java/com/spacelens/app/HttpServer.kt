@@ -43,8 +43,10 @@ class HttpServer(
     private var running = false
 
     // 配对状态（8 位：与桌面端一致，暴力空间 10^8）
-    @Volatile var pin = (100000..999999).random().toString()
+    @Volatile var pin = (10000000..99999999).random().toString()
     private val sessions = mutableMapOf<String, Long>()
+    private data class LoginState(var fails: Int = 0, var lockedUntil: Long = 0L)
+    private val loginStates = java.util.concurrent.ConcurrentHashMap<String, LoginState>()
     /** 正在发送的文件（供 /api/live 显示实时速率）。 */
     private class LiveStat(val name: String, val total: Long) {
         val start = System.currentTimeMillis()
@@ -145,11 +147,13 @@ class HttpServer(
                 if (off == contentLength) buf else buf.copyOf(off)
             } else ByteArray(0)
 
-            val isLocal = sock.inetAddress.isLoopbackAddress
+            val isLoopback = sock.inetAddress.isLoopbackAddress
             val ip = sock.inetAddress.hostAddress ?: ""
             val cookie = headers["cookie"] ?: ""
             val sessToken = Regex("dlsess=([^;]+)").find(cookie)?.groupValues?.get(1) ?: ""
-            // 个人使用模式：恢复加固前的「本机请求直接放行」行为
+            // 回环也必须带 localToken，其他本机进程不能仅凭 127.0.0.1 拿到本机权限/PIN。
+            val requestToken = headers["x-dl-token"] ?: query["k"] ?: ""
+            val isLocal = isLoopback && localToken.isNotEmpty() && requestToken == localToken
             val authed = isLocal || sessions.containsKey(sessToken)
 
             // 路由分发
@@ -435,10 +439,35 @@ class HttpServer(
     }
 
     private fun apiLogin(data: JSONObject, out: OutputStream, localUi: Boolean, ip: String) {
-        val pin = data.optString("pin")
-        // 无论本机还是局域网，都必须给出正确的配对码；本机界面走令牌，不需要登录。
-        if (pin != this.pin) {
-            return sendJson(out, JSONObject().put("ok", false).put("error", "配对码不正确"))
+        val key = ip.ifBlank { "unknown" }
+        val state = loginStates.getOrPut(key) { LoginState() }
+        synchronized(state) {
+            val now = System.currentTimeMillis()
+            if (state.lockedUntil > now) {
+                val wait = ((state.lockedUntil - now) / 1000L).coerceAtLeast(1L)
+                return send(out, 429, "application/json; charset=utf-8",
+                    """{"ok":false,"error":"尝试次数过多，请 $wait 秒后再试","retry_after":$wait}""".toByteArray(),
+                    mapOf("Retry-After" to wait.toString()))
+            }
+            if (state.lockedUntil != 0L) {
+                state.lockedUntil = 0L
+                state.fails = 0
+            }
+            val pin = data.optString("pin")
+            // 无论本机还是局域网，都必须给出正确的配对码；本机界面走令牌，不需要登录。
+            if (pin != this.pin) {
+                state.fails++
+                if (state.fails >= 5) {
+                    state.fails = 0
+                    state.lockedUntil = now + 60_000L
+                    return send(out, 429, "application/json; charset=utf-8",
+                        """{"ok":false,"error":"尝试次数过多，请 60 秒后再试","retry_after":60}""".toByteArray(),
+                        mapOf("Retry-After" to "60"))
+                }
+                return sendJson(out, JSONObject().put("ok", false).put("error", "配对码不正确"))
+            }
+            state.fails = 0
+            state.lockedUntil = 0L
         }
         val token = java.util.UUID.randomUUID().toString().replace("-", "")
         sessions[token] = System.currentTimeMillis()

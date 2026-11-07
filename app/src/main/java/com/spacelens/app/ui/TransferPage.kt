@@ -1,15 +1,21 @@
 package com.spacelens.app.ui
 
 import android.Manifest
+import android.app.DownloadManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Environment
+import android.webkit.JavascriptInterface
+import android.webkit.URLUtil
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -39,6 +45,10 @@ import kotlin.math.max
  */
 class TransferPage(context: Context) : FrameLayout(context) {
 
+    companion object {
+        const val REQ_FILE = 5010
+    }
+
     private val status = TextView(context)
     private val other = TextView(context)
     private val web = WebView(context)
@@ -54,6 +64,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private var starting = false
     private var loadedUrl = ""
     private var panelShown = false
+    private var fileCallback: ValueCallback<Array<Uri>>? = null
     private val prefs = context.getSharedPreferences("filelens_transfer", Context.MODE_PRIVATE)
 
     init {
@@ -96,6 +107,53 @@ class TransferPage(context: Context) : FrameLayout(context) {
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             webViewClient = WebViewClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onShowFileChooser(
+                        webView: WebView?,
+                        callback: ValueCallback<Array<Uri>>?,
+                        params: FileChooserParams?,
+                ): Boolean {
+                    fileCallback?.onReceiveValue(null)
+                    fileCallback = callback
+                    val activity = context as? android.app.Activity ?: return false
+                    val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE,
+                                params?.mode == FileChooserParams.MODE_OPEN_MULTIPLE)
+                    }
+                    return try {
+                        activity.startActivityForResult(
+                                Intent.createChooser(intent, "选择文件"), REQ_FILE)
+                        true
+                    } catch (_: Throwable) {
+                        fileCallback = null
+                        false
+                    }
+                }
+            }
+            setDownloadListener { url, _, contentDisposition, mimeType, _ ->
+                try {
+                    val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                    val request = DownloadManager.Request(Uri.parse(url)).apply {
+                        addRequestHeader("X-DL-Token", TransferService.localToken)
+                        setTitle(fileName)
+                        setNotificationVisibility(
+                                DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        setDestinationInExternalPublicDir(
+                                Environment.DIRECTORY_DOWNLOADS, fileName)
+                    }
+                    (context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager)
+                            .enqueue(request)
+                    Toast.makeText(context, "已开始下载：$fileName", Toast.LENGTH_SHORT).show()
+                } catch (t: Throwable) {
+                    Toast.makeText(context, "下载失败：${t.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+            addJavascriptInterface(object {
+                @JavascriptInterface
+                fun isAndroid(): Boolean = true
+            }, "androidBridge")
         }
         content.addView(web, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -225,6 +283,25 @@ class TransferPage(context: Context) : FrameLayout(context) {
             return true
         }
         return false
+    }
+
+    fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode != REQ_FILE) return
+        val callback = fileCallback
+        fileCallback = null
+        if (callback == null) return
+        if (resultCode != android.app.Activity.RESULT_OK || data == null) {
+            callback.onReceiveValue(null)
+            return
+        }
+        val uris = ArrayList<Uri>()
+        val clip = data.clipData
+        if (clip != null) {
+            for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris.add(it) }
+        } else {
+            data.data?.let { uris.add(it) }
+        }
+        callback.onReceiveValue(if (uris.isEmpty()) null else uris.toTypedArray())
     }
 
     private fun startService() {
