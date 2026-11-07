@@ -30,6 +30,8 @@ class SwipePager(context: Context) : ViewGroup(context) {
     private var dragging = false
     private var anim: Motion.Animation? = null
     private var velocity: VelocityTracker? = null
+    private var targetPage = 0
+    private var lastW = 0
 
     init {
         isChildrenDrawingOrderEnabled = false
@@ -38,6 +40,7 @@ class SwipePager(context: Context) : ViewGroup(context) {
 
     fun setCurrent(index: Int, animate: Boolean) {
         val target = index.coerceIn(0, childCount - 1)
+        targetPage = target
         val to = target * width
         anim?.cancel()
         showAllPages()
@@ -84,11 +87,23 @@ class SwipePager(context: Context) : ViewGroup(context) {
         for (i in 0 until childCount) {
             getChildAt(i).layout(i * w, 0, (i + 1) * w, h)
         }
-        if (scrollX != currentPage * w) {
-            scrollX = currentPage * w
+        // 宽度变化（旋转/分屏）：旧几何作废，取消动画并直接对齐目标页。
+        if (w != lastW) {
+            lastW = w
+            anim?.cancel()
+            anim = null
+            currentPage = targetPage
+            scrollX = targetPage * w
+            updatePageTransforms()
+            applySettledVisibility()
+            return
+        }
+        // 动画/拖拽过程中绝不把 scrollX 拽回旧页；只在静止时用目标页兜底对齐。
+        if (anim == null && !dragging && scrollX != targetPage * w) {
+            scrollX = targetPage * w
         }
         updatePageTransforms()
-        if (anim == null && !dragging && scrollX == currentPage * w) {
+        if (anim == null && !dragging && scrollX == targetPage * w) {
             applySettledVisibility()
         }
     }
@@ -164,6 +179,7 @@ class SwipePager(context: Context) : ViewGroup(context) {
     }
 
     private fun settleTo(page: Int, velocityX: Float) {
+        targetPage = page
         val from = scrollX.toFloat()
         val to = (page * width).toFloat()
         val duration = settleDuration(from, to, velocityX)
