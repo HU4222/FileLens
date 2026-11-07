@@ -28,6 +28,8 @@ class BenchPage(context: Context) : FrameLayout(context) {
     private val progress = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal)
     private val writeValue = TextView(context)
     private val readValue = TextView(context)
+    private val randomValue = TextView(context)
+    private val randomUnit = TextView(context)
     private val gradeText = TextView(context)
     private val conclusion = TextView(context)
     private val note = TextView(context)
@@ -61,7 +63,7 @@ class BenchPage(context: Context) : FrameLayout(context) {
             setTextColor(Theme.palette.text)
         })
         content.addView(TextView(context).apply {
-            text = "顺序读写 · 前一半写、后一半读"
+            text = "顺序读写 + 4K 随机 · 按时间跑满"
             textSize = 12f
             setTextColor(Theme.palette.muted)
             setPadding(0, dp(4f), 0, dp(10f))
@@ -151,13 +153,14 @@ class BenchPage(context: Context) : FrameLayout(context) {
         content.addView(speedCard, speedLp)
 
         val results = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = LinearLayout.VERTICAL
             setPadding(0, dp(12f), 0, 0)
         }
         content.addView(results, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        results.addView(resultCard("平均写入", writeValue), weightParams(1f, 0))
-        results.addView(resultCard("平均读取", readValue), weightParams(1f, 8))
+        results.addView(resultCard("平均写入", writeValue))
+        results.addView(resultCard("平均读取", readValue))
+        results.addView(resultCard("4K 随机（IOPS）", randomValue, randomUnit, "IOPS"))
 
         gradeText.apply {
             text = "尚未测试"
@@ -240,6 +243,8 @@ class BenchPage(context: Context) : FrameLayout(context) {
         progress.progress = 1000
         writeValue.text = String.format(Locale.US, "%.1f", r.seqWriteMb)
         readValue.text = String.format(Locale.US, "%.1f", r.seqReadMb)
+        randomValue.text = String.format(Locale.US, "%.0f", r.randReadIops)
+        randomUnit.text = String.format(Locale.US, "IOPS · %.1f MB/s", r.randReadMb)
         gradeText.text = "分级 · ${r.grade}"
         gradeText.setTextColor(Theme.palette.brand)
         conclusion.text = if (r.seqWriteMb >= 80.0) {
@@ -260,17 +265,28 @@ class BenchPage(context: Context) : FrameLayout(context) {
         progress.progress = 0
         writeValue.text = "—"
         readValue.text = "—"
+        randomValue.text = "—"
+        randomUnit.text = "IOPS"
         gradeText.text = "尚未测试"
         gradeText.setTextColor(Theme.palette.muted)
         conclusion.text = "选择 5 秒或 10 秒，点开始测速。"
         note.text = "测试文件只写在 cacheDir，结束即删。"
     }
 
-    private fun resultCard(label: String, value: TextView): LinearLayout {
+    private fun resultCard(
+            label: String,
+            value: TextView,
+            unitView: TextView? = null,
+            unitLabel: String = "MB/s",
+    ): LinearLayout {
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12f), dp(12f), dp(12f), dp(12f))
             background = rounded(Theme.palette.panelSoft, Theme.palette.line, Radius.PANEL)
+            val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.bottomMargin = dp(8f)
+            layoutParams = lp
         }
         card.addView(TextView(context).apply {
             text = label
@@ -285,18 +301,15 @@ class BenchPage(context: Context) : FrameLayout(context) {
             setPadding(0, dp(2f), 0, 0)
         }
         card.addView(value)
-        card.addView(TextView(context).apply {
-            text = "MB/s"
+        val unit = unitView ?: TextView(context)
+        unit.apply {
+            text = unitLabel
             textSize = 10f
             setTextColor(Theme.palette.muted)
-        })
+        }
+        card.addView(unit)
         return card
     }
-
-    private fun weightParams(weight: Float, leftMargin: Int): LinearLayout.LayoutParams =
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, weight).apply {
-                this.leftMargin = dp(leftMargin.toFloat())
-            }
 
     private fun styleChips() {
         for ((seconds, chip) in arrayOf(5 to chip5, 10 to chip10)) {

@@ -93,8 +93,10 @@ object BenchEngine {
         if (available < 4L * MB) throw IllegalStateException("可用空间不足，无法测速")
         // 单次最多使用可用空间的 30%，且不超过 4GB，避免为了跑满时长写爆存储。
         val writeCap = min((available * 0.3).toLong(), MAX_WRITE_BYTES)
-        val writeMs = totalMs / 2
-        val readMs = totalMs - writeMs
+        // 顺序写 40% / 顺序读 40% / 4K 随机读写 20%
+        val writeMs = totalMs * 40L / 100L
+        val readMs = totalMs * 40L / 100L
+        val randomMs = totalMs - writeMs - readMs
         val allStart = SystemClock.elapsedRealtime()
 
         val file = File(dir, "seq.bin")
@@ -175,15 +177,50 @@ object BenchEngine {
         }
         val readEnd = SystemClock.elapsedRealtime()
         val seqRead = mbPerSec(readTotal, readEnd - readStart)
+
+        // 第三阶段：4KB 块随机读写，读写交替；只测 IOPS，不替代顺序大文件测试。
+        val randomStart = SystemClock.elapsedRealtime()
+        val randomWindow = SpeedWindow(randomStart)
+        var randomOps = 0L
+        var randomBytes = 0L
+        var randomReportAt = randomStart
+        if (written >= 4096L) {
+            val rnd = ByteBuffer.allocateDirect(4096)
+            while (!cancelled) {
+                val now = SystemClock.elapsedRealtime()
+                if (now - randomStart >= randomMs) break
+                val pos = (Math.random() * max(1L, written - 4096L)).toLong()
+                rnd.clear()
+                if (randomOps % 2L == 0L) {
+                    ch.read(rnd, pos)
+                } else {
+                    rnd.putInt((randomOps and 0x7FFFFFFF).toInt())
+                    rnd.flip()
+                    ch.write(rnd, pos)
+                }
+                randomOps++
+                randomBytes += 4096
+                randomWindow.add(now, randomBytes)
+                if (now - randomReportAt >= 200L) {
+                    randomReportAt = now
+                    report(l, "正在 4K 随机读写…", randomWindow.instant(now),
+                            allStart, totalMs, now)
+                }
+            }
+        }
+        val randomEnd = SystemClock.elapsedRealtime()
+        val randomSec = max((randomEnd - randomStart) / 1000.0, 0.001)
+        val randomIops = randomOps / randomSec
+        val randomMb = randomBytes / MB / randomSec
         if (cancelled) throw CancellationException("cancelled")
 
-        val elapsed = readEnd - allStart
+        val elapsed = randomEnd - allStart
         val grade = BenchGrade.grade(seqWrite)
         val weakest = if (seqWrite <= seqRead) "顺序写" else "顺序读"
         val note = if (spaceLimited) "受可用空间限制，写入阶段提前结束" else ""
         return Result(
                 seqWrite, seqRead,
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                randomIops, randomMb, 0.0, 0.0, 0.0, 0.0, 0.0,
                 written, note, grade, weakest, elapsed,
         )
         } finally {
