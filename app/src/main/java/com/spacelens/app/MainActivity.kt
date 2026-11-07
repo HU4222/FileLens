@@ -61,6 +61,7 @@ import com.spacelens.app.ui.Theme
 import com.spacelens.app.ui.ThemeMode
 import com.spacelens.app.ui.TopBar
 import com.spacelens.app.ui.TransferPage
+import com.spacelens.app.ui.TrashPage
 import com.spacelens.app.ui.TreePage
 import com.spacelens.app.ui.WindowClass
 import java.io.File
@@ -139,6 +140,7 @@ class MainActivity : Activity() {
         updateMine()
         updateOverview()
         loadSnapshot()
+        cleanupExpiredTrash()
 
         // 启动标识（420ms），首帧即品牌页，不阻塞交互初始化
         root.addView(SplashView(this), FrameLayout.LayoutParams(
@@ -170,6 +172,7 @@ class MainActivity : Activity() {
         minePage = MinePage(this)
         searchPage = SearchPage(this)
         cleanPage = CleanPage(this)
+        cleanPage.onTrashClick = { showTrashPage() }
         transferPage = TransferPage(this)
         transferPage.onPanelVisibility = { open -> tabBar.isEnabled = !open }
 
@@ -409,6 +412,27 @@ class MainActivity : Activity() {
 
     private fun isTreeVisible(): Boolean =
             ::treeOverlay.isInitialized && treeOverlay.visibility == View.VISIBLE
+
+    private fun showTrashPage() {
+        val dialog = android.app.Dialog(this,
+                android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        val page = TrashPage(this)
+        page.onClose = { dialog.dismiss() }
+        dialog.setContentView(page)
+        dialog.setOnDismissListener { cleanPage.updateTrashEntry() }
+        dialog.show()
+    }
+
+    private fun cleanupExpiredTrash() {
+        Thread {
+            val n = try {
+                Trash.purgeExpired(this)
+            } catch (_: Throwable) {
+                0
+            }
+            if (n > 0) runOnUiThread { toast("已自动清理 $n 项过期文件") }
+        }.start()
+    }
 
     private fun showTreeOverlay() {
         if (!::treeOverlay.isInitialized) return
