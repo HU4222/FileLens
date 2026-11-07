@@ -97,7 +97,7 @@ class TabBar(context: Context) : View(context) {
         canvas.drawLine(0f, 0.5f * d, width.toFloat(), 0.5f * d,
                 Draw.stroke(p.line, 1f * d))
 
-        // DropLink 风格：选中项底部一条短靛蓝指示条
+        // FileLens 风格：选中项底部一条短靛蓝指示条
         val iw = itemWidth()
         val indW = 18f * d
         val indLeft = contentLeft() + progress * iw + (iw - indW) / 2f

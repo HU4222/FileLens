@@ -11,7 +11,7 @@ import kotlin.math.min
 
 /**
  * M4 六项测速（串行）：顺序写 / 顺序读 / 4K 随机读 / 4K 随机写 / 元数据 / fsync。
- * 只写应用专属外部目录 `getExternalFilesDir(null)/bench/`，结束清理；不碰用户文件。
+ * 只写 `context.cacheDir/bench/`，结束清理；不碰用户存储目录。
  */
 object BenchEngine {
 
@@ -53,19 +53,23 @@ object BenchEngine {
         if (thread?.isAlive == true) return
         cancelled = false
         thread = Thread({
+            val dir = File(context.cacheDir, "bench")
             try {
-                val dir = File(context.cacheDir, "bench")
                 dir.mkdirs()
                 clear(dir)
                 val free = dir.usableSpace
                 val sizeMb = if (free < 1536L * MB) 64 else FILE_MB
                 val r = runInternal(dir, sizeMb, listener)
-                clear(dir)
                 listener.onFinished(r)
             } catch (t: Throwable) {
                 listener.onError(t.message ?: "测速失败")
+            } finally {
+                try {
+                    clear(dir)
+                } catch (_: Throwable) {
+                }
             }
-        }, "SpaceLens-Bench").also { it.start() }
+        }, "FileLens-Bench").also { it.start() }
     }
 
     fun cancel() {

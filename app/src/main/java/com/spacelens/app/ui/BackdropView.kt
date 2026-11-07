@@ -8,7 +8,7 @@ import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.view.View
 
-/** 全局背景：DropLink 的径向渐变 + 底部品牌微光。 */
+/** 全局背景：FileLens 的径向渐变 + 底部品牌微光。 */
 class BackdropView(context: Context) : View(context) {
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)

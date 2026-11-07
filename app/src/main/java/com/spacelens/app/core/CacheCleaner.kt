@@ -129,14 +129,33 @@ object CacheCleaner {
                     ?: return ShellResult(false, "Shizuku binder 不可用")
             val service = IShizukuService.Stub.asInterface(binder)
             val process = service.newProcess(arrayOf("sh", "-c", cmd), null, null)
-            val out = ParcelFileDescriptor.AutoCloseInputStream(process.inputStream)
-                    .bufferedReader().use { it.readText() }.trim()
-            val err = ParcelFileDescriptor.AutoCloseInputStream(process.errorStream)
-                    .bufferedReader().use { it.readText() }.trim()
+            val out = StringBuilder()
+            val err = StringBuilder()
+            // stdout/stderr 必须并发读取，否则子进程写满任一管道都会互相阻塞。
+            val outThread = Thread({
+                try {
+                    ParcelFileDescriptor.AutoCloseInputStream(process.inputStream)
+                            .bufferedReader().use { out.append(it.readText()) }
+                } catch (_: Throwable) {
+                }
+            }, "FileLens-Shizuku-Out")
+            val errThread = Thread({
+                try {
+                    ParcelFileDescriptor.AutoCloseInputStream(process.errorStream)
+                            .bufferedReader().use { err.append(it.readText()) }
+                } catch (_: Throwable) {
+                }
+            }, "FileLens-Shizuku-Err")
+            outThread.start()
+            errThread.start()
+            outThread.join()
+            errThread.join()
             val code = process.waitFor()
+            val stdout = out.toString().trim()
+            val stderr = err.toString().trim()
             val text = when {
-                out.isNotEmpty() -> out
-                err.isNotEmpty() -> err
+                stdout.isNotEmpty() -> stdout
+                stderr.isNotEmpty() -> stderr
                 else -> "exit=$code"
             }
             ShellResult(code == 0, text)

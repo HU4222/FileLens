@@ -1,16 +1,11 @@
 package com.spacelens.app.core
 
 /**
- * 垃圾建议：只读 NodeStore，复用 Classifier 的文件类型与 Health 的缓存路径口径。
+ * 垃圾建议：只读 NodeStore，文件类型全部交给 Classifier.categoryOf。
+ * Classifier 不提供风险等级 API，风险文案沿用既有「可删/可重建/谨慎」三档。
  * 只输出分类与候选节点；是否可删仍由 DeletePolicy 决定。
  */
 object GarbageAdvisor {
-
-    enum class Risk(val label: String) {
-        SAFE("可删"),
-        REBUILD("可重建"),
-        CAUTION("谨慎"),
-    }
 
     data class Item(
             val node: Int,
@@ -22,7 +17,7 @@ object GarbageAdvisor {
     data class Category(
             val key: String,
             val label: String,
-            val risk: Risk,
+            val risk: String,
             val count: Int,
             val bytes: Long,
             val items: List<Item>,
@@ -30,11 +25,11 @@ object GarbageAdvisor {
     )
 
     fun scan(store: NodeStore, rootPath: String): List<Category> {
-        val cache = Bucket("cache", "缓存", Risk.SAFE)
-        val empty = Bucket("empty", "空目录", Risk.SAFE)
-        val logs = Bucket("logs", "日志文件", Risk.SAFE)
-        val apk = Bucket("apk", "旧安装包", Risk.CAUTION)
-        val thumbs = Bucket("thumbs", "缩略图", Risk.REBUILD)
+        val cache = Bucket("cache", "缓存", "可删")
+        val empty = Bucket("empty", "空目录", "可删")
+        val logs = Bucket("logs", "日志文件", "可删")
+        val apk = Bucket("apk", "旧安装包", "谨慎")
+        val thumbs = Bucket("thumbs", "缩略图", "可重建")
         val all = arrayOf(cache, empty, logs, apk, thumbs)
         if (store.count <= 1) return all.map { it.finish() }
 
@@ -52,6 +47,8 @@ object GarbageAdvisor {
                     continue
                 }
                 if (flags and NodeStore.FILE == 0) continue
+                // 文件类型统一由 Classifier 判定；GarbageAdvisor 只做聚合。
+                val category = Classifier.categoryOf(name, flags)
                 when {
                     p.contains("/cache/") || p.contains("/.cache/") ||
                             p.contains("/tmp/") || p.contains("/temp/") ->
@@ -59,9 +56,10 @@ object GarbageAdvisor {
                     p.contains("/thumbnails/") || p.contains("/.thumbnails/") ||
                             p.contains("/thumb/") ->
                         thumbs.add(i, name, path, size)
-                    name.lowercase().endsWith(".log") || p.contains("/log/") ->
+                    category == Classifier.DOC &&
+                            (name.lowercase().endsWith(".log") || p.contains("/log/")) ->
                         logs.add(i, name, path, size)
-                    Classifier.categoryOf(name, flags) == Classifier.APK ->
+                    category == Classifier.APK ->
                         apk.add(i, name, path, size)
                 }
             }
@@ -72,7 +70,7 @@ object GarbageAdvisor {
     private class Bucket(
             val key: String,
             val label: String,
-            val risk: Risk,
+            val risk: String,
     ) {
         var count = 0
         var bytes = 0L

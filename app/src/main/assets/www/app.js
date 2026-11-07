@@ -1,5 +1,5 @@
 /* ============================================================
-   DropLink 互传 · 前端逻辑
+   FileLens 互传 · 前端逻辑
    ============================================================ */
 (() => {
   'use strict';
@@ -119,7 +119,7 @@
   function friendlyNetError(e) {
     const m = String((e && e.message) || e || '').toLowerCase();
     if (m.includes('failed to fetch') || m.includes('networkerror') || m.includes('load failed')) {
-      return '连不上接收端：确认接收端上的 DropLink 还在运行，且两端在同一个 Wi-Fi';
+      return '连不上接收端：确认接收端上的 FileLens 还在运行，且两端在同一个 Wi-Fi';
     }
     if (m.includes('timeout') || m.includes('timed out')) return '连接超时：接收端可能进了休眠，或 Wi-Fi 信号弱';
     if (m.includes('abort')) return '请求被中断，请重试';
@@ -1024,7 +1024,6 @@
       <div class="sheet-actions">
         <button class="btn btn-primary" data-act="sheetDownload">${ico('down')}下载</button>
         <button class="btn" data-act="sheetShare" ${isEmpty ? 'disabled title="空文件无需分享"' : ''}>${ico('qr')}分享</button>
-        ${state.session && state.session.local ? `<button class="btn" data-act="sheetOpenLocal">${ico('folderOpen')}在本机打开</button>` : ''}
         <button class="btn btn-plain" data-act="closeSheet">关闭</button>
       </div>
     `);
@@ -1736,7 +1735,7 @@
         html.push(`<div class="card">
           <h3>浏览范围</h3>
           <div class="kv"><span>当前可以浏览</span>
-            <b style="color:${allFiles ? 'var(--ok)' : 'var(--muted)'}">${allFiles ? '全部文件' : '仅 DropLink 目录'}</b>
+            <b style="color:${allFiles ? 'var(--ok)' : 'var(--muted)'}">${allFiles ? '全部文件' : '仅 FileLens 目录'}</b>
           </div>
           <p class="muted" style="font-size:12.5px;margin:8px 0 0">
             ${allFiles
@@ -1761,7 +1760,6 @@
           </div>
           <div class="sheet-actions" style="margin-top:10px">
             <button class="btn btn-primary" data-act="saveRecv">保存目录</button>
-            <button class="btn" data-act="openRecv">打开文件夹</button>
           </div>
         </div>`);
       }
@@ -1837,7 +1835,7 @@
     </div>`);
 
     // 署名（G-16）：只在「我的」页底部出现一次，不放进按钮/提示/引导文案
-    html.push('<p class="author">由 HU4222 制作 · DropLink</p>');
+    html.push('<p class="author">由 HU4222 制作 · FileLens</p>');
 
     $('#aboutBody').innerHTML = html.join('');
   }
@@ -1898,19 +1896,7 @@
     const fwMismatch = (hasPub && !coversPub) || (hasPriv && !coversPriv);
     const android = isAndroid();
 
-    const fwCard = android ? '' : `
-        <div class="card">
-          <h3>防火墙</h3>
-          <div class="kv"><span>DropLink 放行规则</span>
-            <b style="color:${d.fw_rule ? 'var(--ok)' : 'var(--danger)'}">${d.fw_rule ? '已添加' : '未添加'}</b>
-          </div>
-          ${detail.profiles ? `<div class="kv"><span>覆盖网络</span><b>${esc(detail.profiles)}</b></div>` : ''}
-          ${detail.port ? `<div class="kv"><span>端口</span><b>${esc(detail.port)}</b></div>` : ''}
-          ${fwMismatch
-            ? '<p class="muted" style="font-size:12px;margin:8px 0 0;color:var(--danger)">规则没覆盖你当前的网络类型（网络是「公用」但规则只放了「专用」之类）。点下面的「设置防火墙规则」重新放行一次即可。</p>'
-            : (d.fw_rule ? '<p class="muted" style="font-size:12px;margin:8px 0 0">规则配置正确，覆盖了当前网络。若还连不上，看下面的排查。</p>'
-              : '<p class="muted" style="font-size:12px;margin:8px 0 0">点上面的「设置防火墙规则」即可放行。</p>')}
-        </div>`;
+    const fwCard = '';
 
     const netCard = android ? '' : `
         <div class="card">
@@ -1934,7 +1920,6 @@
             防火墙和「专用网络」都解决不了它。最省事的办法是让<b>接收端开「移动热点」</b>，发送端连接收端的热点，
             直接绕开宿舍路由器。
           </p>
-          <button class="btn btn-primary" data-act="openHotspot">打开移动热点设置</button>
         </div>`;
 
     sheetFrame(`
@@ -1964,7 +1949,6 @@
         </div>
       </div>
       <div class="sheet-actions">
-        <button class="btn btn-primary" data-act="openHotspot">打开移动热点设置</button>
         <button class="btn btn-plain" data-act="closeSheet">关闭</button>
       </div>
     `);
@@ -2072,12 +2056,6 @@
       case 'sheetShare':
         if (state.sheetEntry) shareEntry(state.sheetEntry);
         break;
-      case 'sheetOpenLocal':
-        if (state.sheetEntry) {
-          api('/api/open', { method: 'POST', body: JSON.stringify({ path: state.sheetEntry.path }) })
-            .then(() => toast('已在本机打开')).catch((e) => toast(e.message, true));
-        }
-        break;
       case 'copyShared':
         if (state.sharedUrl) copyText(state.sharedUrl);
         break;
@@ -2122,34 +2100,12 @@
           .catch((e) => toast(e.message, true));
         break;
       }
-      case 'openRecv':
-        api('/api/open', { method: 'POST', body: JSON.stringify({ path: state.recvDir }) })
-          .catch((e) => toast(e.message, true));
-        break;
-      case 'firewallSet': {
-        const d = await api('/api/firewall/set', { method: 'POST', body: '{}' })
-          .catch((e) => ({ ok: false, msg: e.message }));
-        if (d.ok) toast(d.msg || '防火墙规则已添加');
-        else toast(d.cancelled ? '已取消，未做改动' : (d.msg || '设置失败'), true);
-        break;
-      }
-      case 'firewallRemove': {
-        const d = await api('/api/firewall/remove', { method: 'POST', body: '{}' })
-          .catch((e) => ({ ok: false, msg: e.message }));
-        if (d.ok) toast(d.msg || '防火墙规则已删除');
-        else toast(d.cancelled ? '已取消，未做改动' : (d.msg || '删除失败'), true);
-        break;
-      }
       case 'diag': {
         const d = await api('/api/diag').catch(() => null);
         if (d) showDiag(d);
         else toast('检测失败', true);
         break;
       }
-      case 'openHotspot':
-        api('/api/open-hotspot', { method: 'POST', body: '{}' })
-          .catch((e) => toast(e.message, true));
-        break;
       case 'scanConnect': {
         const bridge = window.androidBridge;
         if (bridge && bridge.scanQrCode) {
@@ -2166,7 +2122,7 @@
                 /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^169\.254\./.test(h)
               );
             } catch (e) { ok = false; }
-            if (!ok) { toast('不是有效的 DropLink 地址', 'err'); return; }
+            if (!ok) { toast('不是有效的 FileLens 地址', 'err'); return; }
             toast('扫码成功，正在连接…', 'ok');
             window.location.href = url;
           };

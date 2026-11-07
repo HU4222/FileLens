@@ -335,7 +335,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 }
                 if (tries >= 25) {
                     starting = false
-                    fail("启动失败：端口占用或系统限制")
+                    fail("启动失败：" + (TransferService.lastError ?: "端口占用或系统限制"))
                     return
                 }
                 handler.postDelayed(this, 200L)

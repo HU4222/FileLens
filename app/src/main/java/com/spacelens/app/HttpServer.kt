@@ -17,8 +17,11 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.URLDecoder
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 /**
@@ -35,7 +38,7 @@ class HttpServer(
     /** 浏览根目录：用户授权「所有文件访问」后无需重启服务即可浏览整个存储。 */
     private val rootDir: File get() = rootProvider()
 
-    /** 接收目录：固定为 Download/DropLink，电脑端只能往这里写（BUG-08）。 */
+    /** 接收目录：固定为 Download/FileLens，电脑端只能往这里写（BUG-08）。 */
     private val recvDir: File get() = recvProvider().apply { mkdirs() }
 
     private val pool = Executors.newCachedThreadPool()
@@ -44,7 +47,7 @@ class HttpServer(
 
     // 配对状态（8 位：与桌面端一致，暴力空间 10^8）
     @Volatile var pin = (10000000..99999999).random().toString()
-    private val sessions = mutableMapOf<String, Long>()
+    private val sessions = ConcurrentHashMap<String, Long>()
     private data class LoginState(var fails: Int = 0, var lockedUntil: Long = 0L)
     private val loginStates = java.util.concurrent.ConcurrentHashMap<String, LoginState>()
     /** 正在发送的文件（供 /api/live 显示实时速率）。 */
@@ -54,31 +57,41 @@ class HttpServer(
     }
     private val liveStats = java.util.concurrent.ConcurrentHashMap<String, LiveStat>()
 
-    private val clipItems = mutableListOf<JSONObject>()
-    private val transferItems = mutableListOf<JSONObject>()
-    private val shareMap = mutableMapOf<String, ShareEntry>()
-    private val peers = mutableMapOf<String, JSONObject>()  // ip -> {ts, name}
-    private val pending = mutableListOf<JSONObject>()       // 待接收推送
+    private val clipItems = CopyOnWriteArrayList<JSONObject>()
+    private val transferItems = CopyOnWriteArrayList<JSONObject>()
+    private val shareMap = ConcurrentHashMap<String, ShareEntry>()
+    private val peers = ConcurrentHashMap<String, JSONObject>()  // ip -> {ts, name}
+    private val pending = CopyOnWriteArrayList<JSONObject>()     // 待接收推送
     private var sendDir: File = File(".")
-    private var clipId = 0
+    private val clipId = AtomicInteger()
 
     data class ShareEntry(val path: File, val exp: Long)
 
-    fun start() {
-        rootDir.mkdirs()
-        recvDir.mkdirs()
-        sendDir = File(recvDir, ".droplink-send").apply { mkdirs() }
-        running = true
-        thread(name = "dl-http") {
-            try {
-                serverSocket = ServerSocket(port, 64, InetAddress.getByName("0.0.0.0"))
+    @Volatile var lastError: String? = null
+        private set
+
+    fun start(): Boolean {
+        lastError = null
+        return try {
+            rootDir.mkdirs()
+            recvDir.mkdirs()
+            sendDir = File(recvDir, ".filelens-send").apply { mkdirs() }
+            // 先同步 bind；只有端口真正拿到后才把 running 置为 true。
+            serverSocket = ServerSocket(port, 64, InetAddress.getByName("0.0.0.0"))
+            running = true
+            thread(name = "filelens-http") {
                 while (running) {
                     val sock = try { serverSocket?.accept() } catch (_: Exception) { break }
                     sock?.let { pool.execute { handle(it) } }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
+            true
+        } catch (t: Throwable) {
+            running = false
+            lastError = t.message ?: t.javaClass.simpleName
+            try { serverSocket?.close() } catch (_: Throwable) {}
+            serverSocket = null
+            false
         }
     }
 
@@ -272,7 +285,7 @@ class HttpServer(
             .put("local", localUi)
             .put("device", android.os.Build.MODEL)
             .put("platform", "android")
-            .put("app", "DropLink")
+            .put("app", "FileLens")
             .put("version", appVersion())
             .put("recv_dir", recvDir.absolutePath)
             .put("lan_urls", JSONArray(urls))
@@ -487,11 +500,11 @@ class HttpServer(
         if (text.isEmpty() || Regex("^[—\\-–_\\s]+$").matches(text)) {
             return sendJson(out, JSONObject().put("ok", false).put("error", "内容为空"))
         }
-        clipId++
-        val item = JSONObject().put("id", clipId).put("ts", System.currentTimeMillis() / 1000).put("text", text)
+        val id = clipId.incrementAndGet()
+        val item = JSONObject().put("id", id).put("ts", System.currentTimeMillis() / 1000).put("text", text)
         clipItems.add(0, item)
         if (clipItems.size > 100) clipItems.removeAt(clipItems.size - 1)
-        transferItems.add(0, JSONObject().put("id", "t$clipId").put("name", "剪贴板").put("kind", "text")
+        transferItems.add(0, JSONObject().put("id", "t$id").put("name", "剪贴板").put("kind", "text")
             .put("dir", "up").put("size", text.length).put("time", System.currentTimeMillis() / 1000))
         sendJson(out, JSONObject().put("ok", true))
     }
@@ -654,7 +667,7 @@ class HttpServer(
         if (total > (8L shl 30)) {
             return sendJson(out, JSONObject().put("ok", false).put("error", "打包内容超过 8 GB，请分批下载"))
         }
-        val name = "DropLink_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
+        val name = "FileLens_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
             .format(java.util.Date()) + ".zip"
         out.write("HTTP/1.1 200 OK\r\n".toByteArray())
         out.write("Content-Type: application/zip\r\n".toByteArray())
@@ -946,7 +959,7 @@ class HttpServer(
     }
 
     private fun sendQr(text: String?, out: OutputStream) {
-        val t = text ?: "DropLink"
+        val t = text ?: "FileLens"
         try {
             val hints = mapOf(EncodeHintType.MARGIN to 1)
             val matrix = QRCodeWriter().encode(t, BarcodeFormat.QR_CODE, 320, 320, hints)

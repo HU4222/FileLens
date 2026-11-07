@@ -26,7 +26,7 @@ object AppStats {
             val appBytes: Long,
             val icon: Drawable?,
     ) {
-        val totalBytes: Long get() = dataBytes + cacheBytes
+        val totalBytes: Long get() = dataBytes + cacheBytes + appBytes
     }
 
     data class Result(

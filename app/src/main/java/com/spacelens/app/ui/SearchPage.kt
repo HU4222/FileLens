@@ -136,13 +136,8 @@ class SearchPage(context: Context) : LinearLayout(context) {
     private fun buildChips() {
         chips.removeAllViews()
         val labels = Classifier.labels
-        for (i in 0 until 6) {
-            val label = when (i) {
-                4 -> "安装包"
-                5 -> "其它"
-                else -> labels[i]
-            }
-            addChip(label, types.contains(i)) {
+        for (i in labels.indices) {
+            addChip(labels[i], types.contains(i)) {
                 if (types.contains(i)) types.remove(i) else types.add(i)
                 buildChips()
                 refresh()
@@ -240,10 +235,9 @@ class SearchPage(context: Context) : LinearLayout(context) {
                     if (typeSet.isNotEmpty()) {
                         var ok = false
                         for (t in typeSet) {
-                            if (t == 5) {
-                                if (cat == Classifier.ARCHIVE || cat == Classifier.OTHER) ok = true
-                            } else if (cat == t) {
+                            if (cat == t) {
                                 ok = true
+                                break
                             }
                         }
                         if (!ok) continue

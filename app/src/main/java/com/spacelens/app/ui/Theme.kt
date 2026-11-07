@@ -22,7 +22,7 @@ enum class ThemeMode(val stored: Int, val label: String) {
 }
 
 /**
- * DropLink 视觉 token 的 Android 侧唯一来源。
+ * FileLens 视觉 token 的 Android 侧唯一来源。
  * 所有自绘 View 读取 [palette]，禁止在 View 内散落十六进制颜色。
  */
 data class Palette(
@@ -49,7 +49,7 @@ data class Palette(
     fun colorFor(index: Int): Int = category[index % category.size]
 }
 
-/** DropLink 视觉圆角（dp）。卡片/列表/按钮只从这里取，不散落魔法数字。 */
+/** FileLens 视觉圆角（dp）。卡片/列表/按钮只从这里取，不散落魔法数字。 */
 object Radius {
     const val PANEL = 18f
     const val SM = 12f

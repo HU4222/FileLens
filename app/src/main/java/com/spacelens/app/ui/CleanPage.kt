@@ -432,9 +432,9 @@ class CleanPage(context: Context) : LinearLayout(context) {
                 typeface = Draw.SANS_MEDIUM
                 setTextColor(Theme.palette.text)
             }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-            val riskColor = if (cat.risk == GarbageAdvisor.Risk.CAUTION) Theme.palette.danger else Theme.palette.warn
+            val riskColor = if (cat.risk == "谨慎") Theme.palette.danger else Theme.palette.warn
             val badge = TextView(context).apply {
-                text = cat.risk.label
+                text = cat.risk
                 textSize = 11f
                 typeface = Draw.SANS_MEDIUM
                 gravity = Gravity.CENTER
@@ -739,7 +739,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
             CacheCleaner.State.NOT_AUTHORIZED ->
                 "Shizuku 已运行，尚未授权。授权后才能执行缓存清理。"
             CacheCleaner.State.AUTHORIZED ->
-                "Shizuku 已授权。只清缓存，不会丢登录；首次打开会慢一点。"
+                "Shizuku 已授权。会先全局回收所有应用缓存，再清外部 cache；不会丢登录。"
         }
         shizukuAction.text = when (shizuku.state) {
             CacheCleaner.State.NOT_INSTALLED -> "去了解 Shizuku"
@@ -788,7 +788,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
         if (shizuku.state != CacheCleaner.State.AUTHORIZED) return
         Dialogs.showMessage(activity, "清缓存",
                 "只清缓存，不会丢登录；首次打开会慢一点。\n\n" +
-                        "将执行系统缓存回收，并只删除各应用外部 cache 目录。",
+                        "先执行系统全局缓存回收（影响所有应用），再只删除各应用外部 cache 目录。",
                 positive = "清缓存", onPositive = { doClearCache() },
                 negative = "取消", onNegative = {})
     }

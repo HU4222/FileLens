@@ -26,6 +26,7 @@ class TransferService : Service() {
         @Volatile var running = false
         @Volatile var port = 0
         @Volatile var pin = ""
+        @Volatile var lastError: String? = null
         /** 本机 WebView 用的界面令牌；回环请求仍按本机处理。 */
         @Volatile var localToken: String = ""
 
@@ -45,9 +46,11 @@ class TransferService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        lastError = null
         val chosen = choosePort()
         if (chosen <= 0) {
             running = false
+            lastError = "8848–8860 端口全部被占用"
             stopSelf()
             return
         }
@@ -67,8 +70,16 @@ class TransferService : Service() {
                     android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING,
             )
         }
-        server = HttpServer(this, chosen, { storageRoot() }, { recvRoot() }, localToken).apply { start() }
-        pin = server?.pin.orEmpty()
+        val http = HttpServer(this, chosen, { storageRoot() }, { recvRoot() }, localToken)
+        if (!http.start()) {
+            lastError = http.lastError ?: "HTTP 服务绑定失败"
+            server = null
+            running = false
+            stopSelf()
+            return
+        }
+        server = http
+        pin = http.pin
         running = true
     }
 
@@ -109,7 +120,7 @@ class TransferService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
-                .setContentTitle("文件管家 · 互传运行中")
+                .setContentTitle("FileLens · 互传运行中")
                 .setContentText("端口 $port · 打开 App 查看地址")
                 .setContentIntent(pi)
                 .setOngoing(true)
@@ -121,7 +132,7 @@ class TransferService : Service() {
         if (Build.VERSION.SDK_INT >= 26) {
             val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             nm.createNotificationChannel(
-                    NotificationChannel(CHANNEL_ID, "文件管家互传", NotificationManager.IMPORTANCE_LOW),
+                    NotificationChannel(CHANNEL_ID, "FileLens 互传", NotificationManager.IMPORTANCE_LOW),
             )
         }
     }

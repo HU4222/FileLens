@@ -15,7 +15,7 @@ object Ease {
     fun outExpo(t: Float): Float = if (t >= 1f) 1f else 1f - exp((-10f * t)).toFloat()
 
     /**
-     * DropLink 曲线：cubic-bezier(0.22, 0.9, 0.3, 1)。
+     * FileLens 曲线：cubic-bezier(0.22, 0.9, 0.3, 1)。
      * 三次贝塞尔求值，不用 outCubic 近似。
      */
     fun softOut(t: Float): Float {
