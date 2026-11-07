@@ -1,0 +1,80 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+def propsFile = new File(
+        System.getenv('SPACELENS_KEYSTORE_PROPERTIES')
+                ?: "${System.getProperty('user.home')}/.workbuddy/secrets/spacelens/keystore.properties")
+def keyProps = new Properties()
+def hasKey = propsFile.isFile()
+if (hasKey) {
+    propsFile.withInputStream { keyProps.load(it) }
+}
+
+android {
+    namespace 'com.spacelens.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.spacelens.app"
+        minSdk 24
+        targetSdk 34
+        versionCode 2
+        versionName "1.1.0"
+    }
+
+    signingConfigs {
+        release {
+            if (hasKey) {
+                storeFile file(keyProps['storeFile'])
+                storePassword keyProps['storePassword']
+                keyAlias keyProps['keyAlias']
+                keyPassword keyProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hasKey) {
+                signingConfig signingConfigs.release
+            }
+        }
+        debug {
+            applicationIdSuffix ".debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+        freeCompilerArgs += ['-Xjvm-default=all']
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+
+    packaging {
+        resources {
+            excludes += ['DebugProbesKt.bin', 'META-INF/versions/9/OSGiManifest.mf',
+                         'META-INF/*.kotlin_module', 'kotlin/**', 'META-INF/*.version']
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+}

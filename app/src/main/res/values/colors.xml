@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sl_bg">#f3f5fb</color>
+    <color name="sl_panel">#ffffff</color>
+    <color name="sl_text">#0f172a</color>
+    <color name="sl_brand">#4f46e5</color>
+    <color name="sl_window_bg">#f3f5fb</color>
+</resources>
