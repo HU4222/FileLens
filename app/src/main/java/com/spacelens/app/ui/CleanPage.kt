@@ -26,6 +26,7 @@ import com.spacelens.app.core.CacheCleaner
 import com.spacelens.app.core.DeletePolicy
 import com.spacelens.app.core.Duplicates
 import com.spacelens.app.core.Fmt
+import com.spacelens.app.core.GarbageAdvisor
 import com.spacelens.app.core.NodeStore
 import com.spacelens.app.core.Trash
 import java.io.File
@@ -40,6 +41,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
     private val segmentBar = LinearLayout(context)
     private val dupChip = TextView(context)
     private val appChip = TextView(context)
+    private val garbageChip = TextView(context)
 
     private val dupSection = LinearLayout(context)
     private val summary = TextView(context)
@@ -65,6 +67,18 @@ class CleanPage(context: Context) : LinearLayout(context) {
     private val sortCache = TextView(context)
     private val appList = ListView(context)
     private val appAdapter = AppAdapter()
+
+    private val garbageSection = LinearLayout(context)
+    private val garbageTitle = TextView(context)
+    private val garbageStatus = TextView(context)
+    private val garbageBody = LinearLayout(context)
+    private val garbageDelete = Button(context)
+    private var garbageCategories: List<GarbageAdvisor.Category> = emptyList()
+    private val garbageSelected = HashSet<Int>()
+    private val garbageExpanded = HashSet<String>()
+    private var garbageStarted = false
+    private var garbageLoading = false
+    private var garbageGeneration = 0
 
     private val handler = Handler(Looper.getMainLooper())
     private var segment = -1
@@ -93,6 +107,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
         buildSegments()
         buildDuplicateSection()
         buildAppSection()
+        buildGarbageSection()
         selectSegment(0)
     }
 
@@ -100,8 +115,12 @@ class CleanPage(context: Context) : LinearLayout(context) {
         segmentBar.orientation = HORIZONTAL
         segmentBar.gravity = Gravity.CENTER_VERTICAL
         segmentBar.setPadding(0, 0, 0, dp(8f))
-        for ((i, chip) in arrayOf(dupChip, appChip).withIndex()) {
-            chip.text = if (i == 0) "重复文件" else "应用占用"
+        for ((i, chip) in arrayOf(dupChip, appChip, garbageChip).withIndex()) {
+            chip.text = when (i) {
+                0 -> "重复文件"
+                1 -> "应用占用"
+                else -> "垃圾建议"
+            }
             chip.textSize = 12f
             chip.gravity = Gravity.CENTER
             chip.setPadding(dp(14f), dp(7f), dp(14f), dp(7f))
@@ -114,7 +133,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
     }
 
     private fun styleSegments() {
-        for ((i, chip) in arrayOf(dupChip, appChip).withIndex()) {
+        for ((i, chip) in arrayOf(dupChip, appChip, garbageChip).withIndex()) {
             val active = i == segment
             chip.setTextColor(if (active) Color.WHITE else Theme.palette.text2)
             chip.background = rounded(if (active) Theme.palette.brand else Theme.palette.panelSunken,
@@ -128,9 +147,14 @@ class CleanPage(context: Context) : LinearLayout(context) {
         styleSegments()
         dupSection.visibility = if (index == 0) View.VISIBLE else View.GONE
         appSection.visibility = if (index == 1) View.VISIBLE else View.GONE
-        if (index == 1) onAppSelected() else if (!started && !running) {
-            started = true
-            if ((store?.count ?: 0) > 1) startScan()
+        garbageSection.visibility = if (index == 2) View.VISIBLE else View.GONE
+        when (index) {
+            1 -> onAppSelected()
+            2 -> if (!garbageStarted) startGarbageScan()
+            else -> if (!started && !running) {
+                started = true
+                if ((store?.count ?: 0) > 1) startScan()
+            }
         }
     }
 
@@ -304,6 +328,207 @@ class CleanPage(context: Context) : LinearLayout(context) {
         refreshShizuku()
     }
 
+    private fun buildGarbageSection() {
+        garbageSection.orientation = VERTICAL
+        garbageSection.visibility = View.GONE
+        garbageTitle.apply {
+            text = "垃圾建议"
+            textSize = 18f
+            typeface = Draw.SANS_MEDIUM
+            setTextColor(Theme.palette.text)
+        }
+        garbageSection.addView(garbageTitle, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
+        garbageStatus.apply {
+            text = "复用现有分类与删除策略；不可删项会置灰"
+            textSize = 13f
+            setTextColor(Theme.palette.muted)
+            setPadding(0, dp(5f), 0, dp(6f))
+        }
+        garbageSection.addView(garbageStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
+        val scroll = ScrollView(context).apply {
+            isVerticalScrollBarEnabled = false
+            clipToPadding = false
+        }
+        garbageBody.orientation = VERTICAL
+        scroll.addView(garbageBody, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        garbageSection.addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+
+        garbageDelete.apply {
+            text = "删除选中（进回收站）"
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            background = rounded(Theme.palette.danger, Theme.palette.danger, Radius.PILL)
+            isEnabled = false
+            setOnClickListener { confirmGarbageDelete() }
+        }
+        val lp = LayoutParams(LayoutParams.MATCH_PARENT, dp(42f))
+        lp.topMargin = dp(6f)
+        garbageSection.addView(garbageDelete, lp)
+        addView(garbageSection, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+    }
+
+    private fun startGarbageScan() {
+        val snapshot = store
+        if (snapshot == null || snapshot.count <= 1) {
+            garbageStatus.text = "先到「空间」页扫描一次"
+            return
+        }
+        if (garbageLoading) return
+        garbageStarted = true
+        garbageLoading = true
+        val gen = ++garbageGeneration
+        garbageSelected.clear()
+        garbageStatus.text = "正在整理垃圾建议…"
+        garbageBody.removeAllViews()
+        garbageDelete.isEnabled = false
+        Thread({
+            val result = GarbageAdvisor.scan(snapshot, rootPath)
+            handler.post {
+                if (gen != garbageGeneration) return@post
+                garbageLoading = false
+                garbageCategories = result
+                renderGarbage()
+            }
+        }, "FileLens-Garbage").start()
+    }
+
+    private fun renderGarbage() {
+        garbageBody.removeAllViews()
+        val totalItems = garbageCategories.sumOf { it.count }
+        val totalBytes = garbageCategories.sumOf { it.bytes }
+        garbageStatus.text = "共 $totalItems 项 · ${Fmt.bytes(totalBytes)} · 不可删项已置灰"
+        if (totalItems == 0) {
+            garbageBody.addView(TextView(context).apply {
+                text = "没有发现可建议清理的垃圾"
+                textSize = 13f
+                setTextColor(Theme.palette.muted)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(36f), 0, 0)
+            }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+            garbageDelete.isEnabled = false
+            return
+        }
+        for (cat in garbageCategories) {
+            if (cat.count == 0) continue
+            val card = LinearLayout(context).apply {
+                orientation = VERTICAL
+                setPadding(dp(10f), dp(8f), dp(10f), dp(8f))
+                background = rounded(Theme.palette.panelSoft, Theme.palette.line, Radius.PANEL)
+            }
+            val clp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            clp.bottomMargin = dp(8f)
+            garbageBody.addView(card, clp)
+
+            val head = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            head.addView(TextView(context).apply {
+                text = "${cat.label} · ${cat.count} 项 · ${Fmt.bytes(cat.bytes)}"
+                textSize = 15f
+                typeface = Draw.SANS_MEDIUM
+                setTextColor(Theme.palette.text)
+            }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            val riskColor = if (cat.risk == GarbageAdvisor.Risk.CAUTION) Theme.palette.danger else Theme.palette.warn
+            val badge = TextView(context).apply {
+                text = cat.risk.label
+                textSize = 11f
+                typeface = Draw.SANS_MEDIUM
+                gravity = Gravity.CENTER
+                setTextColor(riskColor)
+                setPadding(dp(8f), dp(2f), dp(8f), dp(2f))
+                background = rounded(Theme.alpha(riskColor, 24), Theme.alpha(riskColor, 80), Radius.PILL)
+            }
+            head.addView(badge, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+            card.addView(head, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+            card.setOnClickListener {
+                if (garbageExpanded.contains(cat.key)) garbageExpanded.remove(cat.key)
+                else garbageExpanded.add(cat.key)
+                renderGarbage()
+            }
+
+            if (!garbageExpanded.contains(cat.key)) continue
+            for (item in cat.items) {
+                val decision = DeletePolicy.decide(context, store = store ?: return,
+                        node = item.node, rootPath = rootPath)
+                val row = LinearLayout(context).apply {
+                    orientation = VERTICAL
+                    setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
+                    background = rounded(Theme.palette.panel, Theme.palette.line, Radius.SM)
+                }
+                val check = CheckBox(context).apply {
+                    text = item.name
+                    textSize = 12f
+                    isEnabled = decision.selectable
+                    isChecked = garbageSelected.contains(item.node)
+                    setTextColor(if (decision.selectable) Theme.palette.text else Theme.palette.muted)
+                    alpha = if (decision.selectable) 1f else 0.55f
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) garbageSelected.add(item.node) else garbageSelected.remove(item.node)
+                        garbageDelete.isEnabled = garbageSelected.isNotEmpty()
+                    }
+                }
+                row.addView(check, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+                row.addView(TextView(context).apply {
+                    text = if (decision.selectable) item.path else "${item.path} · ${decision.reason}"
+                    textSize = 9.5f
+                    setTextColor(Theme.palette.muted)
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+                    setPadding(dp(28f), 0, 0, 0)
+                })
+                val lp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                lp.bottomMargin = dp(4f)
+                card.addView(row, lp)
+            }
+            if (cat.truncated) {
+                card.addView(TextView(context).apply {
+                    text = "还有 ${cat.count - cat.items.size} 条未展开"
+                    textSize = 11f
+                    setTextColor(Theme.palette.muted)
+                    setPadding(dp(28f), dp(4f), 0, 0)
+                })
+            }
+        }
+        garbageDelete.isEnabled = garbageSelected.isNotEmpty()
+    }
+
+    private fun confirmGarbageDelete() {
+        if (garbageSelected.isEmpty()) return
+        val nodes = garbageSelected.toIntArray()
+        Dialogs.showDeleteConfirm(context as android.app.Activity, "删除垃圾建议",
+                "将把 ${nodes.size} 项移入回收站，可恢复。\n只删除可选项；不可删项不会进入这里。") {
+            doGarbageDelete(nodes)
+        }
+    }
+
+    private fun doGarbageDelete(nodes: IntArray) {
+        val snapshot = store ?: return
+        val targets = ArrayList<Triple<File, String, Int>>()
+        for (node in nodes) {
+            val decision = DeletePolicy.decide(context, snapshot, node, rootPath)
+            if (!decision.selectable) continue
+            val abs = snapshot.absolutePathOf(rootPath, node)
+            val rel = snapshot.relativePathOf(node)
+            if (rel.isEmpty()) continue
+            targets.add(Triple(File(abs), rel, node))
+        }
+        if (targets.isEmpty()) return
+        garbageDelete.isEnabled = false
+        Thread({
+            val result = Trash.move(context, targets.map { it.first to it.second })
+            val moved = targets.filter { !it.first.exists() }.map { it.third }.toIntArray()
+            if (moved.isNotEmpty()) snapshot.markDeleted(moved)
+            handler.post {
+                toast(if (result.skipped > 0) "已移入 ${result.moved} 项，跳过 ${result.skipped} 项" else "已移入回收站 ${result.moved} 项")
+                startGarbageScan()
+            }
+        }, "FileLens-GarbageTrash").start()
+    }
+
     private fun buildShizukuCard() {
         shizukuCard.orientation = VERTICAL
         shizukuCard.setPadding(dp(12f), dp(10f), dp(12f), dp(10f))
@@ -344,6 +569,10 @@ class CleanPage(context: Context) : LinearLayout(context) {
             onAppSelected()
             return
         }
+        if (segment == 2) {
+            if (!garbageStarted) startGarbageScan()
+            return
+        }
         if (!started && !running) {
             started = true
             if ((store?.count ?: 0) > 1) startScan()
@@ -378,6 +607,15 @@ class CleanPage(context: Context) : LinearLayout(context) {
         progress.visibility = View.GONE
         status.text = "同 size 且 ≥1MB 的文件才会做 SHA-256；可中断。"
         updateSummary()
+        garbageGeneration++
+        garbageLoading = false
+        garbageStarted = false
+        garbageCategories = emptyList()
+        garbageSelected.clear()
+        garbageBody.removeAllViews()
+        garbageDelete.isEnabled = false
+        garbageStatus.text = "复用现有分类与删除策略；不可删项会置灰"
+        if (segment == 2) startGarbageScan()
     }
 
     fun onShizukuPermissionResult() {
