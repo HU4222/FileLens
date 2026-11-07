@@ -1,20 +1,28 @@
 package com.spacelens.app.ui
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import com.spacelens.app.core.AppStats
+import com.spacelens.app.core.CacheCleaner
 import com.spacelens.app.core.DeletePolicy
 import com.spacelens.app.core.Duplicates
 import com.spacelens.app.core.Fmt
@@ -23,12 +31,17 @@ import com.spacelens.app.core.Trash
 import java.io.File
 import kotlin.math.max
 
-/** 清理页：重复文件分组 + 回收站删除；垃圾建议留给下一版。 */
+/** 清理页：重复文件 + 应用占用排行 + Shizuku 清缓存。 */
 class CleanPage(context: Context) : LinearLayout(context) {
 
     var store: NodeStore? = null
     var rootPath: String = ""
 
+    private val segmentBar = LinearLayout(context)
+    private val dupChip = TextView(context)
+    private val appChip = TextView(context)
+
+    private val dupSection = LinearLayout(context)
     private val summary = TextView(context)
     private val status = TextView(context)
     private val progress = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal)
@@ -36,7 +49,25 @@ class CleanPage(context: Context) : LinearLayout(context) {
     private val cancel = Button(context)
     private val body = LinearLayout(context)
     private val delete = Button(context)
+
+    private val appSection = LinearLayout(context)
+    private val appTitle = TextView(context)
+    private val appSummary = TextView(context)
+    private val appStatus = TextView(context)
+    private val appProgress = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal)
+    private val shizukuCard = LinearLayout(context)
+    private val shizukuText = TextView(context)
+    private val shizukuAction = Button(context)
+    private val clearCache = Button(context)
+    private val usageGate = LinearLayout(context)
+    private val sortRow = LinearLayout(context)
+    private val sortTotal = TextView(context)
+    private val sortCache = TextView(context)
+    private val appList = ListView(context)
+    private val appAdapter = AppAdapter()
+
     private val handler = Handler(Looper.getMainLooper())
+    private var segment = -1
 
     private var groups: List<Duplicates.Group> = emptyList()
     private val selected = HashSet<Int>()
@@ -45,18 +76,73 @@ class CleanPage(context: Context) : LinearLayout(context) {
     private var generation = 0
     @Volatile private var cancelFlag = false
 
+    private var appEntries: List<AppStats.Entry> = emptyList()
+    private var appFailed = 0
+    private var appLoading = false
+    private var appLoaded = false
+    private var appGeneration = 0
+    private var sortByCache = false
+    private var clearing = false
+    private var pendingFreed: Long? = null
+    private var shizuku = CacheCleaner.status(context)
+
     init {
         orientation = VERTICAL
         setPadding(dp(18f), dp(6f), dp(18f), dp(8f))
         setBackgroundColor(Color.TRANSPARENT)
+        buildSegments()
+        buildDuplicateSection()
+        buildAppSection()
+        selectSegment(0)
+    }
 
+    private fun buildSegments() {
+        segmentBar.orientation = HORIZONTAL
+        segmentBar.gravity = Gravity.CENTER_VERTICAL
+        segmentBar.setPadding(0, 0, 0, dp(8f))
+        for ((i, chip) in arrayOf(dupChip, appChip).withIndex()) {
+            chip.text = if (i == 0) "重复文件" else "应用占用"
+            chip.textSize = 12f
+            chip.gravity = Gravity.CENTER
+            chip.setPadding(dp(14f), dp(7f), dp(14f), dp(7f))
+            chip.setOnClickListener { selectSegment(i) }
+            val lp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            lp.rightMargin = dp(8f)
+            segmentBar.addView(chip, lp)
+        }
+        addView(segmentBar, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    }
+
+    private fun styleSegments() {
+        for ((i, chip) in arrayOf(dupChip, appChip).withIndex()) {
+            val active = i == segment
+            chip.setTextColor(if (active) Color.WHITE else Theme.palette.text2)
+            chip.background = rounded(if (active) Theme.palette.brand else Theme.palette.panelSunken,
+                    if (active) Theme.palette.brand else Theme.palette.line, Radius.PILL)
+        }
+    }
+
+    private fun selectSegment(index: Int) {
+        if (index == segment) return
+        segment = index
+        styleSegments()
+        dupSection.visibility = if (index == 0) View.VISIBLE else View.GONE
+        appSection.visibility = if (index == 1) View.VISIBLE else View.GONE
+        if (index == 1) onAppSelected() else if (!started && !running) {
+            started = true
+            if ((store?.count ?: 0) > 1) startScan()
+        }
+    }
+
+    private fun buildDuplicateSection() {
+        dupSection.orientation = VERTICAL
         summary.apply {
             text = "重复文件"
             textSize = 18f
             typeface = Draw.SANS_MEDIUM
             setTextColor(Theme.palette.text)
         }
-        addView(summary, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        dupSection.addView(summary, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         status.apply {
             text = "同 size 且 ≥1MB 的文件才会做 SHA-256；可中断。"
@@ -64,13 +150,13 @@ class CleanPage(context: Context) : LinearLayout(context) {
             setTextColor(Theme.palette.muted)
             setPadding(0, dp(5f), 0, dp(6f))
         }
-        addView(status, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        dupSection.addView(status, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         progress.max = 100
         progress.progress = 0
         progress.progressTintList = android.content.res.ColorStateList.valueOf(Theme.palette.brand)
         progress.visibility = View.GONE
-        addView(progress, LayoutParams(LayoutParams.MATCH_PARENT, dp(4f)))
+        dupSection.addView(progress, LayoutParams(LayoutParams.MATCH_PARENT, dp(4f)))
 
         val tools = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -94,7 +180,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
         }
         tools.addView(start, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         tools.addView(cancel, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        addView(tools, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        dupSection.addView(tools, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         val scroll = ScrollView(context).apply {
             isVerticalScrollBarEnabled = false
@@ -103,7 +189,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
         body.orientation = VERTICAL
         scroll.addView(body, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+        dupSection.addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
         delete.apply {
             text = "删除选中（进回收站）"
@@ -114,22 +200,171 @@ class CleanPage(context: Context) : LinearLayout(context) {
         }
         val dlp = LayoutParams(LayoutParams.MATCH_PARENT, dp(42f))
         dlp.topMargin = dp(6f)
-        addView(delete, dlp)
+        dupSection.addView(delete, dlp)
         updateSummary()
+        addView(dupSection, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+    }
+
+    private fun buildAppSection() {
+        appSection.orientation = VERTICAL
+        appSection.visibility = View.GONE
+        appTitle.apply {
+            text = "应用占用排行"
+            textSize = 18f
+            typeface = Draw.SANS_MEDIUM
+            setTextColor(Theme.palette.text)
+        }
+        appSection.addView(appTitle, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
+        appSummary.apply {
+            text = "只读系统 StorageStats，不遍历文件"
+            textSize = 13f
+            setTextColor(Theme.palette.muted)
+            setPadding(0, dp(5f), 0, dp(3f))
+        }
+        appSection.addView(appSummary, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
+        appStatus.apply {
+            text = "首次进入需要「使用情况访问」授权"
+            textSize = 12f
+            setTextColor(Theme.palette.muted)
+            setPadding(0, 0, 0, dp(5f))
+        }
+        appSection.addView(appStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
+        appProgress.max = 100
+        appProgress.progress = 0
+        appProgress.progressTintList = android.content.res.ColorStateList.valueOf(Theme.palette.brand)
+        appProgress.visibility = View.GONE
+        appSection.addView(appProgress, LayoutParams(LayoutParams.MATCH_PARENT, dp(4f)))
+
+        usageGate.orientation = VERTICAL
+        usageGate.gravity = Gravity.CENTER
+        usageGate.setPadding(dp(16f), dp(26f), dp(16f), dp(26f))
+        usageGate.background = rounded(Theme.palette.panelSoft, Theme.palette.line, Radius.PANEL)
+        usageGate.visibility = View.GONE
+        usageGate.addView(TextView(context).apply {
+            text = "需要「使用情况访问」权限才能读取各应用占用"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.muted)
+            setLineSpacing(dp(4f).toFloat(), 1f)
+        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        val goto = Button(context).apply {
+            text = "去授权"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            background = rounded(Theme.palette.brand, Theme.palette.brand, Radius.PILL)
+            setOnClickListener { openUsageSettings() }
+        }
+        val glp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+        glp.gravity = Gravity.CENTER
+        glp.topMargin = dp(12f)
+        usageGate.addView(goto, glp)
+        appSection.addView(usageGate, LayoutParams(LayoutParams.MATCH_PARENT, dp(210f)))
+
+        buildShizukuCard()
+        appSection.addView(shizukuCard, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
+        sortRow.orientation = HORIZONTAL
+        sortRow.gravity = Gravity.CENTER_VERTICAL
+        sortRow.setPadding(0, dp(8f), 0, dp(4f))
+        for ((i, chip) in arrayOf(sortTotal, sortCache).withIndex()) {
+            chip.text = if (i == 0) "按占用" else "按缓存"
+            chip.textSize = 11f
+            chip.gravity = Gravity.CENTER
+            chip.setPadding(dp(12f), dp(5f), dp(12f), dp(5f))
+            chip.setOnClickListener {
+                sortByCache = i == 1
+                styleSort()
+                renderAppData()
+            }
+            val lp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            lp.rightMargin = dp(6f)
+            sortRow.addView(chip, lp)
+        }
+        appSection.addView(sortRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        styleSort()
+
+        appList.divider = null
+        appList.dividerHeight = 0
+        appList.isVerticalScrollBarEnabled = false
+        appList.adapter = appAdapter
+        appList.setOnItemClickListener { _, _, position, _ ->
+            val e = appAdapter.items.getOrNull(position) ?: return@setOnItemClickListener
+            try {
+                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:${e.packageName}")))
+            } catch (_: Throwable) {
+                toast("无法打开应用信息")
+            }
+        }
+        appSection.addView(appList, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+        addView(appSection, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+        refreshShizuku()
+    }
+
+    private fun buildShizukuCard() {
+        shizukuCard.orientation = VERTICAL
+        shizukuCard.setPadding(dp(12f), dp(10f), dp(12f), dp(10f))
+        shizukuCard.background = rounded(Theme.palette.panelSoft, Theme.palette.line, Radius.PANEL)
+        val lp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        lp.topMargin = dp(8f)
+        shizukuCard.layoutParams = lp
+
+        shizukuText.textSize = 12f
+        shizukuText.setTextColor(Theme.palette.muted)
+        shizukuText.setLineSpacing(dp(3f).toFloat(), 1f)
+        shizukuCard.addView(shizukuText, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
+        val row = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.END
+            setPadding(0, dp(8f), 0, 0)
+        }
+        shizukuAction.textSize = 11.5f
+        shizukuAction.setTextColor(Theme.palette.brand)
+        shizukuAction.background = rounded(Theme.palette.brandSoft, Theme.palette.brandSoft, Radius.PILL)
+        shizukuAction.setOnClickListener { onShizukuAction() }
+        clearCache.text = "清缓存"
+        clearCache.textSize = 11.5f
+        clearCache.setTextColor(Color.WHITE)
+        clearCache.background = rounded(Theme.palette.brand, Theme.palette.brand, Radius.PILL)
+        clearCache.isEnabled = false
+        clearCache.setOnClickListener { confirmClearCache() }
+        row.addView(shizukuAction, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        val clp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+        clp.leftMargin = dp(8f)
+        row.addView(clearCache, clp)
+        shizukuCard.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }
 
     fun onShown() {
+        if (segment == 1) {
+            onAppSelected()
+            return
+        }
         if (!started && !running) {
             started = true
             if ((store?.count ?: 0) > 1) startScan()
         }
     }
 
-    fun refresh() {
-        if (!running) startScan()
+    fun onResume() {
+        if (segment != 1) return
+        refreshShizuku()
+        if (!AppStats.hasUsageAccess(context)) {
+            showUsageGate()
+        } else {
+            hideUsageGate()
+            if (!appLoaded && !appLoading) loadApps()
+        }
     }
 
-    /** 扫描/删除后丢旧结果；下次进入清理页再算，避免后台重复哈希。 */
+    fun refresh() {
+        if (segment == 0 && !running) startScan()
+    }
+
     fun reset() {
         generation++
         cancelFlag = true
@@ -143,6 +378,210 @@ class CleanPage(context: Context) : LinearLayout(context) {
         progress.visibility = View.GONE
         status.text = "同 size 且 ≥1MB 的文件才会做 SHA-256；可中断。"
         updateSummary()
+    }
+
+    fun onShizukuPermissionResult() {
+        refreshShizuku()
+        val st = CacheCleaner.status(context)
+        if (st.state == CacheCleaner.State.AUTHORIZED) toast("Shizuku 已授权")
+    }
+
+    private fun onAppSelected() {
+        refreshShizuku()
+        if (!AppStats.hasUsageAccess(context)) {
+            showUsageGate()
+        } else {
+            hideUsageGate()
+            if (!appLoaded && !appLoading) loadApps()
+        }
+    }
+
+    private fun showUsageGate() {
+        appEntries = emptyList()
+        appLoaded = false
+        appAdapter.items = emptyList()
+        appAdapter.notifyDataSetChanged()
+        usageGate.visibility = View.VISIBLE
+        appSummary.visibility = View.GONE
+        appStatus.visibility = View.GONE
+        appProgress.visibility = View.GONE
+        shizukuCard.visibility = View.GONE
+        sortRow.visibility = View.GONE
+        appList.visibility = View.GONE
+    }
+
+    private fun hideUsageGate() {
+        usageGate.visibility = View.GONE
+        appSummary.visibility = View.VISIBLE
+        appStatus.visibility = View.VISIBLE
+        shizukuCard.visibility = View.VISIBLE
+        sortRow.visibility = View.VISIBLE
+        appList.visibility = View.VISIBLE
+    }
+
+    private fun openUsageSettings() {
+        try {
+            context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        } catch (_: Throwable) {
+            try {
+                context.startActivity(Intent(Settings.ACTION_SETTINGS))
+            } catch (_: Throwable) {
+                toast("无法打开系统设置")
+            }
+        }
+    }
+
+    private fun loadApps() {
+        if (appLoading) return
+        hideUsageGate()
+        val gen = ++appGeneration
+        appLoading = true
+        appLoaded = false
+        appProgress.visibility = View.VISIBLE
+        appProgress.max = 1
+        appProgress.progress = 0
+        appStatus.visibility = View.VISIBLE
+        appStatus.text = "正在统计 0/0"
+        Thread({
+            val result = AppStats.load(context) { done, total ->
+                handler.post {
+                    if (gen != appGeneration) return@post
+                    appProgress.max = max(1, total)
+                    appProgress.progress = done
+                    appStatus.text = "正在统计 $done/$total"
+                }
+            }
+            handler.post {
+                if (gen != appGeneration) return@post
+                appEntries = result.entries
+                appFailed = result.failed
+                appLoading = false
+                appLoaded = true
+                appProgress.visibility = View.GONE
+                renderAppData()
+                refreshShizuku()
+            }
+        }, "FileLens-AppStats").start()
+    }
+
+    private fun renderAppData() {
+        val sorted = AppStats.sort(appEntries, sortByCache)
+        appAdapter.items = sorted
+        appAdapter.notifyDataSetChanged()
+        val data = appEntries.sumOf { it.dataBytes }
+        val cache = appEntries.sumOf { it.cacheBytes }
+        appSummary.text = "共 ${appEntries.size} 个应用 · 数据 ${Fmt.bytes(data)} · 缓存 ${Fmt.bytes(cache)}"
+        val failedText = if (appFailed > 0) " · $appFailed 个应用无法统计" else ""
+        val freed = pendingFreed
+        pendingFreed = null
+        appStatus.text = when {
+            freed != null && cache < freed -> "已刷新：缓存减少 ${Fmt.bytes(freed - cache)}$failedText"
+            freed != null -> "已执行清理；系统统计未报告减少量$failedText"
+            appEntries.isEmpty() -> "没有可统计的应用$failedText"
+            else -> "点应用打开系统信息$failedText"
+        }
+    }
+
+    private fun styleSort() {
+        for ((i, chip) in arrayOf(sortTotal, sortCache).withIndex()) {
+            val active = (i == 1) == sortByCache
+            chip.setTextColor(if (active) Color.WHITE else Theme.palette.text2)
+            chip.background = rounded(if (active) Theme.palette.brand else Theme.palette.panelSunken,
+                    if (active) Theme.palette.brand else Theme.palette.line, Radius.SM)
+        }
+    }
+
+    private fun refreshShizuku() {
+        shizuku = CacheCleaner.status(context)
+        shizukuText.text = when (shizuku.state) {
+            CacheCleaner.State.NOT_INSTALLED ->
+                "Shizuku 未安装。普通应用无法清理其它应用缓存；安装并激活 Shizuku 后才可用。"
+            CacheCleaner.State.NOT_RUNNING ->
+                "Shizuku 已安装，但当前未运行。请打开 Shizuku 并完成激活。"
+            CacheCleaner.State.NOT_AUTHORIZED ->
+                "Shizuku 已运行，尚未授权。授权后才能执行缓存清理。"
+            CacheCleaner.State.AUTHORIZED ->
+                "Shizuku 已授权。只清缓存，不会丢登录；首次打开会慢一点。"
+        }
+        shizukuAction.text = when (shizuku.state) {
+            CacheCleaner.State.NOT_INSTALLED -> "去了解 Shizuku"
+            CacheCleaner.State.NOT_RUNNING -> "打开 Shizuku"
+            CacheCleaner.State.NOT_AUTHORIZED -> "请求授权"
+            CacheCleaner.State.AUTHORIZED -> "重新检测"
+        }
+        clearCache.isEnabled = shizuku.state == CacheCleaner.State.AUTHORIZED && !clearing
+        clearCache.alpha = if (clearCache.isEnabled) 1f else 0.45f
+    }
+
+    private fun onShizukuAction() {
+        when (shizuku.state) {
+            CacheCleaner.State.NOT_INSTALLED -> openShizukuSite()
+            CacheCleaner.State.NOT_RUNNING -> openShizukuApp()
+            CacheCleaner.State.NOT_AUTHORIZED -> {
+                if (!CacheCleaner.requestPermission()) openShizukuApp()
+            }
+            CacheCleaner.State.AUTHORIZED -> {
+                refreshShizuku()
+                toast("Shizuku 已授权")
+            }
+        }
+    }
+
+    private fun openShizukuSite() {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/")))
+        } catch (_: Throwable) {
+            toast("无法打开浏览器")
+        }
+    }
+
+    private fun openShizukuApp() {
+        try {
+            val intent = context.packageManager
+                    .getLaunchIntentForPackage(CacheCleaner.SHIZUKU_PACKAGE)
+            if (intent != null) context.startActivity(intent) else toast("未找到 Shizuku")
+        } catch (_: Throwable) {
+            toast("无法打开 Shizuku")
+        }
+    }
+
+    private fun confirmClearCache() {
+        val activity = context as? android.app.Activity ?: return
+        if (shizuku.state != CacheCleaner.State.AUTHORIZED) return
+        Dialogs.showMessage(activity, "清缓存",
+                "只清缓存，不会丢登录；首次打开会慢一点。\n\n" +
+                        "将执行系统缓存回收，并只删除各应用外部 cache 目录。",
+                positive = "清缓存", onPositive = { doClearCache() },
+                negative = "取消", onNegative = {})
+    }
+
+    private fun doClearCache() {
+        if (clearing || appEntries.isEmpty()) {
+            toast("没有可清理的应用数据")
+            return
+        }
+        clearing = true
+        pendingFreed = appEntries.sumOf { it.cacheBytes }
+        clearCache.isEnabled = false
+        appStatus.text = "正在清理…"
+        val packages = appEntries.map { it.packageName }
+        Thread({
+            val result = CacheCleaner.clearAll(packages) { done, total ->
+                handler.post {
+                    if (clearing) appStatus.text = "正在清理 $done/$total"
+                }
+            }
+            handler.post {
+                clearing = false
+                if (!result.ok) {
+                    pendingFreed = null
+                    toast("清理失败：${result.message}")
+                } else {
+                    toast("清理完成，正在刷新统计")
+                }
+                loadApps()
+            }
+        }, "FileLens-CacheClean").start()
     }
 
     private fun startScan() {
@@ -322,6 +761,78 @@ class CleanPage(context: Context) : LinearLayout(context) {
                 startScan()
             }
         }, "FileLens-CleanTrash").start()
+    }
+
+    private inner class AppAdapter : BaseAdapter() {
+        var items: List<AppStats.Entry> = emptyList()
+
+        override fun getCount(): Int = items.size
+        override fun getItem(position: Int): Any? = items.getOrNull(position)
+        override fun getItemId(position: Int): Long = position.toLong()
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+            val item = items.getOrNull(position) ?: return View(context)
+            val row: LinearLayout
+            val icon: ImageView
+            val name: TextView
+            val pkg: TextView
+            val right: TextView
+            if (convertView == null) {
+                row = LinearLayout(context).apply {
+                    orientation = HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    minimumHeight = dp(64f)
+                    setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
+                    background = rounded(Theme.palette.panel, Theme.palette.line, Radius.SM)
+                }
+                icon = ImageView(context).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    clipToOutline = true
+                    background = rounded(Theme.palette.panelSunken, Theme.palette.line, Radius.SM)
+                }
+                row.addView(icon, LayoutParams(dp(48f), dp(48f)))
+                val middle = LinearLayout(context).apply {
+                    orientation = VERTICAL
+                    setPadding(dp(10f), 0, dp(6f), 0)
+                }
+                name = TextView(context).apply {
+                    textSize = 15f
+                    setTextColor(Theme.palette.text)
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                }
+                pkg = TextView(context).apply {
+                    textSize = 12f
+                    setTextColor(Theme.palette.muted)
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+                }
+                middle.addView(name, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+                middle.addView(pkg, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+                row.addView(middle, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+                right = TextView(context).apply {
+                    textSize = 13f
+                    setTextColor(Theme.palette.text2)
+                    gravity = Gravity.END
+                    setLineSpacing(dp(1.5f).toFloat(), 1f)
+                }
+                row.addView(right, LayoutParams(dp(108f), LayoutParams.WRAP_CONTENT))
+                row.tag = arrayOf(icon, name, pkg, right)
+            } else {
+                row = convertView as LinearLayout
+                @Suppress("UNCHECKED_CAST")
+                val views = row.tag as Array<View>
+                icon = views[0] as ImageView
+                name = views[1] as TextView
+                pkg = views[2] as TextView
+                right = views[3] as TextView
+            }
+            name.text = item.label
+            pkg.text = if (item.system) "${item.packageName} · 系统" else item.packageName
+            icon.setImageDrawable(item.icon ?: context.getDrawable(android.R.drawable.sym_def_app_icon))
+            right.text = "数据 ${Fmt.bytes(item.dataBytes)}\n缓存 ${Fmt.bytes(item.cacheBytes)}\n本体 ${Fmt.bytes(item.appBytes)}"
+            return row
+        }
     }
 
     private fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()

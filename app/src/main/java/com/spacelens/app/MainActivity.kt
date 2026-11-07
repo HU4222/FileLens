@@ -23,6 +23,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.spacelens.app.core.CacheCleaner
 import com.spacelens.app.core.Classifier
 import com.spacelens.app.core.DeletePolicy
 import androidx.core.content.FileProvider
@@ -488,6 +489,10 @@ class MainActivity : Activity() {
             } else {
                 showFallback()
             }
+            return
+        }
+        if (requestCode == CacheCleaner.REQUEST_CODE) {
+            if (::cleanPage.isInitialized) cleanPage.onShizukuPermissionResult()
         }
     }
 
@@ -520,6 +525,7 @@ class MainActivity : Activity() {
         applyBreakpoint()
         updateMine()
         updateOverview()
+        if (::cleanPage.isInitialized) cleanPage.onResume()
         if (pendingScan) {
             if (hasAllFilesAccess() || hasReadAccess()) {
                 pendingScan = false
