@@ -347,6 +347,31 @@ class CleanPage(context: Context) : LinearLayout(context) {
         }
         garbageSection.addView(garbageStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
+        val tools = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(6f))
+        }
+        for ((label, action) in arrayOf(
+                "全选" to { selectAllGarbage(true) },
+                "全不选" to { selectAllGarbage(false) },
+                "反选" to { invertGarbage() },
+        )) {
+            val tv = TextView(context).apply {
+                text = label
+                textSize = 11f
+                gravity = Gravity.CENTER
+                setTextColor(Theme.palette.brand)
+                setPadding(dp(10f), dp(5f), dp(10f), dp(5f))
+                background = rounded(Theme.palette.brandSoft, Theme.palette.brandSoft, Radius.PILL)
+                setOnClickListener { action() }
+            }
+            val lp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            lp.rightMargin = dp(6f)
+            tools.addView(tv, lp)
+        }
+        garbageSection.addView(tools, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
         val scroll = ScrollView(context).apply {
             isVerticalScrollBarEnabled = false
             clipToPadding = false
@@ -443,6 +468,19 @@ class CleanPage(context: Context) : LinearLayout(context) {
                 background = rounded(Theme.alpha(riskColor, 24), Theme.alpha(riskColor, 80), Radius.PILL)
             }
             head.addView(badge, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+            val selectableItems = cat.items.count { garbageSelectable(it.node) }
+            val catCheck = CheckBox(context).apply {
+                isChecked = selectableItems > 0 && cat.items.all {
+                    !garbageSelectable(it.node) || garbageSelected.contains(it.node)
+                }
+                isEnabled = selectableItems > 0
+                alpha = if (selectableItems > 0) 1f else 0.4f
+                setOnCheckedChangeListener { _, checked ->
+                    selectGarbageCategory(cat, checked)
+                    renderGarbage()
+                }
+            }
+            head.addView(catCheck, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
             card.addView(head, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
             card.setOnClickListener {
                 if (garbageExpanded.contains(cat.key)) garbageExpanded.remove(cat.key)
@@ -468,7 +506,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
                     alpha = if (decision.selectable) 1f else 0.55f
                     setOnCheckedChangeListener { _, checked ->
                         if (checked) garbageSelected.add(item.node) else garbageSelected.remove(item.node)
-                        garbageDelete.isEnabled = garbageSelected.isNotEmpty()
+                        updateGarbageSummary()
                     }
                 }
                 row.addView(check, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
@@ -493,6 +531,51 @@ class CleanPage(context: Context) : LinearLayout(context) {
                 })
             }
         }
+        updateGarbageSummary()
+    }
+
+    private fun garbageSelectable(node: Int): Boolean =
+            DeletePolicy.decide(context, store = store ?: return false,
+                    node = node, rootPath = rootPath).selectable
+
+    private fun selectAllGarbage(selected: Boolean) {
+        for (cat in garbageCategories) {
+            for (item in cat.items) {
+                if (garbageSelectable(item.node)) {
+                    if (selected) garbageSelected.add(item.node)
+                    else garbageSelected.remove(item.node)
+                }
+            }
+        }
+        renderGarbage()
+    }
+
+    private fun invertGarbage() {
+        for (cat in garbageCategories) {
+            for (item in cat.items) {
+                if (!garbageSelectable(item.node)) continue
+                if (garbageSelected.contains(item.node)) garbageSelected.remove(item.node)
+                else garbageSelected.add(item.node)
+            }
+        }
+        renderGarbage()
+    }
+
+    private fun selectGarbageCategory(cat: GarbageAdvisor.Category, selected: Boolean) {
+        for (item in cat.items) {
+            if (!garbageSelectable(item.node)) continue
+            if (selected) garbageSelected.add(item.node) else garbageSelected.remove(item.node)
+        }
+    }
+
+    private fun updateGarbageSummary() {
+        var bytes = 0L
+        for (cat in garbageCategories) {
+            for (item in cat.items) {
+                if (garbageSelected.contains(item.node)) bytes += item.size
+            }
+        }
+        garbageStatus.text = "已选 ${garbageSelected.size} 项 · 可释放 ${Fmt.bytes(bytes)}"
         garbageDelete.isEnabled = garbageSelected.isNotEmpty()
     }
 
