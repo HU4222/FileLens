@@ -151,6 +151,24 @@ class SearchPage(context: Context) : LinearLayout(context) {
         schedule(query.text?.toString()?.trim().orEmpty())
     }
 
+    /** 供空间分布卡跳转：按 Classifier 分类索引选中对应 chip 并立即查询。 */
+    fun applyTypeFilter(categoryIndex: Int) {
+        val chip = when (categoryIndex) {
+            Classifier.IMAGE -> Classifier.IMAGE
+            Classifier.VIDEO -> Classifier.VIDEO
+            Classifier.AUDIO -> Classifier.AUDIO
+            Classifier.DOC -> Classifier.DOC
+            Classifier.APK -> Classifier.APK
+            Classifier.ARCHIVE -> Classifier.ARCHIVE
+            Classifier.OTHER -> Classifier.OTHER
+            else -> return
+        }
+        types.clear()
+        types.add(chip)
+        buildChips()
+        refresh()
+    }
+
     private fun buildChips() {
         chips.removeAllViews()
         val labels = Classifier.labels

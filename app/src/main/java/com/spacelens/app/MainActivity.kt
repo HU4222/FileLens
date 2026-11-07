@@ -291,6 +291,10 @@ class MainActivity : Activity() {
             cleanPage.onShown()
         }
         overviewPage.onBench = { showBenchOverlay() }
+        overviewPage.onCategory = { category ->
+            searchPage.applyTypeFilter(category)
+            selectTab(1, animate = true)
+        }
         treePage.onStartScan = { requestScan() }
         treePage.onCancelScan = { cancelScan() }
         treePage.onNodeLongPress = { node -> onTreeNodeLongPress(node) }

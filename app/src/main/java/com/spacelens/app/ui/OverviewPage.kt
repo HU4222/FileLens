@@ -27,6 +27,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
     var onOpenTree: (() -> Unit)? = null
     var onHealth: (() -> Unit)? = null
     var onBench: (() -> Unit)? = null
+    var onCategory: ((Int) -> Unit)? = null
 
     private val scroll = ScrollView(context)
     private val content = Content(context)
@@ -163,6 +164,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
         private val summaryH = 96f * d
 
         private val scanRect = RectF()
+        private val catRects = Array(8) { RectF() }
         private val quickRects = Array(3) { RectF() }
         private var pressed = -1
 
@@ -322,6 +324,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
                 val row = i / 2
                 val left = r.left + col * (cardW + gap)
                 val card = RectF(left, top + row * (cardH + gap), left + cardW, top + row * (cardH + gap) + cardH)
+                catRects[i].set(card)
                 Draw.softShadow(canvas, card, Radius.PANEL * d, d)
                 canvas.drawRoundRect(card, Radius.PANEL * d, Radius.PANEL * d, Draw.fill(p.panel))
                 if (!scanning && i == main && scannedBytes > 0) {
@@ -498,6 +501,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
                             1 -> onOpenTree?.invoke()
                             2 -> onBench?.invoke()
                             3 -> onHealth?.invoke()
+                            in 100..106 -> onCategory?.invoke(h - 100)
                         }
                     }
                     return true
@@ -513,6 +517,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
 
         private fun hit(x: Float, y: Float): Int {
             if (scanRect.contains(x, y)) return 0
+            for (i in 0 until 7) if (catRects[i].contains(x, y)) return 100 + i
             for (i in quickRects.indices) if (quickRects[i].contains(x, y)) return i + 1
             return -1
         }
