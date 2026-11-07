@@ -171,6 +171,7 @@ class MainActivity : Activity() {
         searchPage = SearchPage(this)
         cleanPage = CleanPage(this)
         transferPage = TransferPage(this)
+        transferPage.onPanelVisibility = { open -> tabBar.isEnabled = !open }
 
         pager.addView(overviewPage, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))

@@ -45,7 +45,7 @@ import kotlin.math.max
 
 /**
  * 传输页：进入即启动服务，WebView 作为主界面。
- * 地址/二维码放进「其他设备」底部面板，不再占据首屏。
+ * 地址/二维码放进「连接信息」底部面板，不再占据首屏。
  */
 class TransferPage(context: Context) : FrameLayout(context) {
 
@@ -67,8 +67,12 @@ class TransferPage(context: Context) : FrameLayout(context) {
     }
 
     private val status = TextView(context)
+    private val port = TextView(context)
     private val refresh = TextView(context)
-    private val other = TextView(context)
+    private val stateToggle = LinearLayout(context)
+    private val stateDot = View(context)
+    private val stateText = TextView(context)
+    private val closedView = LinearLayout(context)
     private val web = WebView(context)
     private val errorView = LinearLayout(context)
     private val errorText = TextView(context)
@@ -85,6 +89,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private var starting = false
     private var stopping = false
     private var manualStopped = false
+    private var pendingShowPanel = false
+    var onPanelVisibility: ((Boolean) -> Unit)? = null
     private var loadedUrl = ""
     private var panelShown = false
     private var fileCallback: ValueCallback<Array<Uri>>? = null
@@ -118,13 +124,26 @@ class TransferPage(context: Context) : FrameLayout(context) {
             setBackgroundColor(Theme.palette.panel)
         }
         status.apply {
-            text = "传输 · " + Build.MODEL + " · 未启动"
+            text = "传输 · " + Build.MODEL
             textSize = 13f
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
-            setTextColor(Theme.palette.muted)
+            setTextColor(Theme.palette.text2)
         }
         bar.addView(status, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        port.apply {
+            text = "8848"
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.brand)
+            setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
+            visibility = View.GONE
+            setOnClickListener { showPanel() }
+        }
+        bar.addView(port, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
         refresh.apply {
             text = "刷新"
             textSize = 12f
@@ -137,21 +156,35 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 readCurrentView()
             }
         }
-        bar.addView(refresh, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        other.apply {
-            text = "其他设备"
-            textSize = 12f
-            gravity = Gravity.CENTER
-            setTextColor(Theme.palette.brand)
-            setPadding(dp(10f), dp(6f), dp(10f), dp(6f))
-            background = rounded(Theme.palette.brandSoft, Theme.palette.brandSoft, Radius.PILL)
-            setOnClickListener { showPanel() }
-        }
-        val otherLp = LinearLayout.LayoutParams(
+        val refreshLp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        otherLp.leftMargin = dp(6f)
-        bar.addView(other, otherLp)
+        refreshLp.leftMargin = dp(4f)
+        bar.addView(refresh, refreshLp)
+
+        stateToggle.apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8f), dp(5f), dp(8f), dp(5f))
+            background = rounded(Theme.palette.panelSunken, Theme.palette.line, Radius.PILL)
+            setOnClickListener { toggleService() }
+        }
+        stateDot.apply {
+            setBackground(rounded(Theme.palette.warn, Theme.palette.warn, Radius.PILL))
+        }
+        val dotLp = LinearLayout.LayoutParams(dp(8f), dp(8f))
+        dotLp.rightMargin = dp(5f)
+        stateToggle.addView(stateDot, dotLp)
+        stateText.apply {
+            text = "关闭"
+            textSize = 12f
+            setTextColor(Theme.palette.text2)
+        }
+        stateToggle.addView(stateText, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        val toggleLp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        toggleLp.leftMargin = dp(6f)
+        bar.addView(stateToggle, toggleLp)
         content.addView(bar, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dp(48f)))
@@ -260,6 +293,40 @@ class TransferPage(context: Context) : FrameLayout(context) {
         rlp.topMargin = dp(12f)
         errorView.addView(retry, rlp)
         addView(errorView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+
+        closedView.apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Theme.palette.bg)
+            visibility = View.GONE
+        }
+        closedView.addView(TextView(context).apply {
+            text = "传输服务未开启"
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.text)
+        }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        closedView.addView(TextView(context).apply {
+            text = "开启后，电脑和其他设备可访问手机文件"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.muted)
+            setPadding(0, dp(8f), 0, dp(18f))
+        }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        val openBtn = Button(context).apply {
+            text = "开启传输服务"
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            background = rounded(Theme.palette.brand, Theme.palette.brand, Radius.PILL)
+            setOnClickListener {
+                pendingShowPanel = true
+                startService()
+            }
+        }
+        closedView.addView(openBtn, LinearLayout.LayoutParams(dp(180f), dp(44f)))
+        addView(closedView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
         buildBalls()
         buildPanel()
@@ -618,14 +685,17 @@ class TransferPage(context: Context) : FrameLayout(context) {
                     resources.displayMetrics.density)
             setOnClickListener { }
         }
-        val sheetLp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        val sheetLp = LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                (resources.displayMetrics.heightPixels * 0.60f).toInt())
         sheetLp.gravity = Gravity.BOTTOM
         sheetLp.leftMargin = dp(12f)
         sheetLp.rightMargin = dp(12f)
-        sheetLp.bottomMargin = dp(12f)
+        // 胶囊顶边在离底 80dp，面板底边再留 16dp。
+        sheetLp.bottomMargin = dp(96f)
         panel.addView(sheet, sheetLp)
         sheet.addView(TextView(context).apply {
-            text = "其他设备访问"
+            text = "连接信息"
             textSize = 18f
             typeface = Draw.SANS_MEDIUM
             setTextColor(Theme.palette.text)
@@ -675,7 +745,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
         sheet.addView(stopBtn, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(42f)))
         val close = TextView(context).apply {
-            text = "收起"
+            text = "关闭面板"
             textSize = 11.5f
             gravity = Gravity.CENTER
             setTextColor(Theme.palette.muted)
@@ -687,9 +757,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
     }
 
     fun onShown() {
+        // 传输服务默认关闭，只有用户点状态点或「开启传输服务」才启动。
         updateUi()
-        // 用户主动停止后，本次 App 生命周期内不再自动拉起；面板里有手动「启动服务」。
-        if (!TransferService.running && !manualStopped && !stopping) startService()
     }
 
     fun onResume() {
@@ -743,7 +812,9 @@ class TransferPage(context: Context) : FrameLayout(context) {
         }
         starting = true
         errorView.visibility = GONE
-        status.text = "正在启动…"
+        closedView.visibility = GONE
+        status.text = "传输 · " + Build.MODEL
+        updateStateToggle()
         updatePanelActions()
         try {
             ContextCompat.startForegroundService(context,
@@ -760,6 +831,10 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 if (TransferService.running) {
                     starting = false
                     updateUi()
+                    if (pendingShowPanel) {
+                        pendingShowPanel = false
+                        showPanel()
+                    }
                     return
                 }
                 if (tries >= 25) {
@@ -776,18 +851,24 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
     private fun updateUi() {
         if (stopping) {
-            status.text = "正在停止…"
+            status.text = "传输 · " + Build.MODEL
             status.setTextColor(Theme.palette.muted)
+            updateStateToggle()
             updatePanelActions()
             return
         }
         if (TransferService.running && TransferService.port > 0) {
             starting = false
             errorView.visibility = GONE
+            closedView.visibility = GONE
             web.visibility = View.VISIBLE
+            mainBall.visibility = if (panelShown) View.GONE else View.VISIBLE
             val p = TransferService.port
-            status.text = "传输 · " + Build.MODEL + " · 端口 $p"
-            status.setTextColor(Theme.palette.ok)
+            status.text = "传输 · " + Build.MODEL
+            status.setTextColor(Theme.palette.text2)
+            port.text = "$p"
+            port.visibility = View.VISIBLE
+            updateStateToggle()
             val url = "http://127.0.0.1:$p/?k=" + Uri.encode(TransferService.localToken)
             if (loadedUrl != url) {
                 loadedUrl = url
@@ -806,11 +887,56 @@ class TransferPage(context: Context) : FrameLayout(context) {
             updatePanelActions()
             maybeShowHint()
         } else {
+            starting = false
             web.visibility = View.INVISIBLE
-            status.text = "传输 · " + Build.MODEL + " · 未启动"
+            closedView.visibility = View.VISIBLE
+            port.visibility = View.GONE
+            mainBall.visibility = View.GONE
+            for (i in satBalls.indices) {
+                satBalls[i].visibility = View.GONE
+                satLabels[i].visibility = View.GONE
+            }
+            status.text = "传输 · " + Build.MODEL
             status.setTextColor(Theme.palette.muted)
+            updateStateToggle()
             updatePanelActions()
         }
+    }
+
+    private fun toggleService() {
+        when {
+            TransferService.running -> confirmStop()
+            starting || stopping -> Unit
+            else -> {
+                pendingShowPanel = true
+                startService()
+            }
+        }
+    }
+
+    private fun updateStateToggle() {
+        val color: Int
+        val label: String
+        when {
+            starting -> {
+                color = Color.rgb(156, 163, 175)
+                label = "启动中…"
+            }
+            stopping -> {
+                color = Color.rgb(156, 163, 175)
+                label = "停止中…"
+            }
+            TransferService.running -> {
+                color = Color.rgb(34, 197, 94)
+                label = "开启"
+            }
+            else -> {
+                color = Color.rgb(245, 158, 11)
+                label = "关闭"
+            }
+        }
+        stateDot.setBackground(rounded(color, color, Radius.PILL))
+        stateText.text = label
     }
 
     private fun updatePanelActions() {
@@ -823,17 +949,26 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
     private fun fail(message: String) {
         starting = false
+        pendingShowPanel = false
         status.text = "传输 · " + Build.MODEL + " · 未启动"
         status.setTextColor(Theme.palette.muted)
         errorText.text = message
         errorView.visibility = VISIBLE
+        closedView.visibility = GONE
+        updateStateToggle()
         updatePanelActions()
     }
 
     private fun showPanel() {
         if (panelShown) return
         collapseBalls()
+        mainBall.visibility = View.GONE
+        for (i in satBalls.indices) {
+            satBalls[i].visibility = View.GONE
+            satLabels[i].visibility = View.GONE
+        }
         panelShown = true
+        onPanelVisibility?.invoke(true)
         updatePanelActions()
         panel.visibility = VISIBLE
         panel.alpha = 0f
@@ -851,6 +986,9 @@ class TransferPage(context: Context) : FrameLayout(context) {
             panel.alpha = 1f - t
         }, end = {
             panel.visibility = GONE
+            onPanelVisibility?.invoke(false)
+            mainBall.visibility = if (TransferService.running) View.VISIBLE else View.GONE
+            updateUi()
         })
     }
 
@@ -868,8 +1006,11 @@ class TransferPage(context: Context) : FrameLayout(context) {
         if (stopping || !TransferService.running) return
         stopping = true
         manualStopped = true
-        status.text = "正在停止…"
+        pendingShowPanel = false
+        status.text = "传输 · " + Build.MODEL
         status.setTextColor(Theme.palette.muted)
+        if (panelShown) hidePanel()
+        updateStateToggle()
         updatePanelActions()
         try {
             context.stopService(Intent(context, TransferService::class.java))
@@ -914,7 +1055,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
         if (prefs.getBoolean("hint_shown", false)) return
         prefs.edit().putBoolean("hint_shown", true).apply()
         Toast.makeText(context,
-                "这个页面也能在电脑浏览器里打开，地址在右上角「其他设备」里",
+                "这个页面也能在电脑浏览器里打开，点右上角端口数字查看地址",
                 Toast.LENGTH_LONG).show()
     }
 
