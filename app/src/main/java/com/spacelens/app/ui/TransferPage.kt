@@ -59,9 +59,14 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private val address = TextView(context)
     private val pinText = TextView(context)
     private val qr = ImageView(context)
+    private val startBtn = Button(context)
+    private val stopBtn = Button(context)
     private val handler = Handler(Looper.getMainLooper())
     private var poll: Runnable? = null
+    private var stopPoll: Runnable? = null
     private var starting = false
+    private var stopping = false
+    private var manualStopped = false
     private var loadedUrl = ""
     private var panelShown = false
     private var fileCallback: ValueCallback<Array<Uri>>? = null
@@ -247,14 +252,23 @@ class TransferPage(context: Context) : FrameLayout(context) {
         qlp.gravity = Gravity.CENTER_HORIZONTAL
         sheet.addView(qr, qlp)
 
-        val stop = Button(context).apply {
+        startBtn.apply {
+            text = "启动服务"
+            textSize = 12.5f
+            setTextColor(Color.WHITE)
+            background = rounded(Theme.palette.brand, Theme.palette.brand, Radius.PILL)
+            setOnClickListener { startService() }
+        }
+        sheet.addView(startBtn, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(42f)))
+        stopBtn.apply {
             text = "停止服务"
             textSize = 12.5f
             setTextColor(Color.WHITE)
             background = rounded(Theme.palette.danger, Theme.palette.danger, Radius.PILL)
             setOnClickListener { confirmStop() }
         }
-        sheet.addView(stop, LinearLayout.LayoutParams(
+        sheet.addView(stopBtn, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(42f)))
         val close = TextView(context).apply {
             text = "收起"
@@ -270,7 +284,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
     fun onShown() {
         updateUi()
-        if (!TransferService.running) startService()
+        // 用户主动停止后，本次 App 生命周期内不再自动拉起；面板里有手动「启动服务」。
+        if (!TransferService.running && !manualStopped && !stopping) startService()
     }
 
     fun onResume() {
@@ -305,7 +320,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
     }
 
     private fun startService() {
-        if (TransferService.running || starting) return
+        if (TransferService.running || starting || stopping) return
+        manualStopped = false
         val activity = context as? android.app.Activity
         if (Build.VERSION.SDK_INT >= 33 && activity != null &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
@@ -316,6 +332,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
         starting = true
         errorView.visibility = GONE
         status.text = "正在启动…"
+        updatePanelActions()
         try {
             ContextCompat.startForegroundService(context,
                     Intent(context, TransferService::class.java))
@@ -346,6 +363,12 @@ class TransferPage(context: Context) : FrameLayout(context) {
     }
 
     private fun updateUi() {
+        if (stopping) {
+            status.text = "正在停止…"
+            status.setTextColor(Theme.palette.muted)
+            updatePanelActions()
+            return
+        }
         if (TransferService.running && TransferService.port > 0) {
             starting = false
             errorView.visibility = GONE
@@ -368,12 +391,22 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 "未找到局域网 IP，请先连接 Wi-Fi"
             }
             if (ip != null) qr.setImageBitmap(makeQr("http://$ip:$p/"))
+            updatePanelActions()
             maybeShowHint()
         } else {
             web.visibility = View.INVISIBLE
             status.text = "未启动"
             status.setTextColor(Theme.palette.muted)
+            updatePanelActions()
         }
+    }
+
+    private fun updatePanelActions() {
+        startBtn.visibility = if (TransferService.running || stopping) View.GONE else View.VISIBLE
+        stopBtn.visibility = if (TransferService.running || stopping) View.VISIBLE else View.GONE
+        startBtn.isEnabled = !starting && !stopping
+        stopBtn.isEnabled = !stopping
+        stopBtn.text = if (stopping) "停止中…" else "停止服务"
     }
 
     private fun fail(message: String) {
@@ -382,11 +415,13 @@ class TransferPage(context: Context) : FrameLayout(context) {
         status.setTextColor(Theme.palette.muted)
         errorText.text = message
         errorView.visibility = VISIBLE
+        updatePanelActions()
     }
 
     private fun showPanel() {
         if (panelShown) return
         panelShown = true
+        updatePanelActions()
         panel.visibility = VISIBLE
         panel.alpha = 0f
         sheet.translationY = dp(24f).toFloat()
@@ -411,16 +446,49 @@ class TransferPage(context: Context) : FrameLayout(context) {
         Dialogs.showMessage(activity, "停止传输服务",
                 "停止后电脑和其他设备将立即断开；手机上打开的文件页面也会停止。",
                 positive = "停止服务", onPositive = {
-                    hidePanel()
-                    try {
-                        context.stopService(Intent(context, TransferService::class.java))
-                    } catch (_: Throwable) {
-                    }
-                    loadedUrl = ""
-                    web.loadUrl("about:blank")
-                    updateUi()
+                    stopService()
                 },
                 negative = "取消", onNegative = {})
+    }
+
+    private fun stopService() {
+        if (stopping || !TransferService.running) return
+        stopping = true
+        manualStopped = true
+        status.text = "正在停止…"
+        status.setTextColor(Theme.palette.muted)
+        updatePanelActions()
+        try {
+            context.stopService(Intent(context, TransferService::class.java))
+        } catch (_: Throwable) {
+        }
+        loadedUrl = ""
+        web.loadUrl("about:blank")
+        web.visibility = View.INVISIBLE
+        var tries = 0
+        val job = object : Runnable {
+            override fun run() {
+                if (!TransferService.running) {
+                    stopping = false
+                    stopPoll = null
+                    updateUi()
+                    return
+                }
+                tries++
+                if (tries >= 25) {
+                    stopping = false
+                    stopPoll = null
+                    status.text = "停止超时，请重试"
+                    status.setTextColor(Theme.palette.muted)
+                    updatePanelActions()
+                    toast("停止超时，请重试")
+                    return
+                }
+                handler.postDelayed(this, 200L)
+            }
+        }
+        stopPoll = job
+        handler.postDelayed(job, 200L)
     }
 
     private fun copyAddress() {
@@ -471,6 +539,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
     } catch (_: Throwable) {
         null
     }
+
+    private fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
     private fun rounded(fill: Int, stroke: Int, radius: Float): GradientDrawable =
             GradientDrawable().apply {
