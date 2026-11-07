@@ -49,15 +49,15 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
     companion object {
         const val REQ_FILE = 5010
-        private const val TABBAR_H_DP = 66f
-        private const val BALL_BOTTOM_SCREEN_DP = 88f
-        // TransferPage 的底边就是 TabBar 上沿，所以局部 bottomMargin = 88 - 66。
-        private const val BALL_BOTTOM_DP = BALL_BOTTOM_SCREEN_DP - TABBAR_H_DP
-        private const val LABEL_BOTTOM_DP = 0f
+        private const val TABBAR_H_DP = 80f
+        private const val BALL_BOTTOM_SCREEN_DP = 96f
+        // 1.2.0 起 pager 延伸到屏幕底，胶囊悬浮在上面；球位置直接用屏幕坐标。
+        private const val BALL_BOTTOM_DP = BALL_BOTTOM_SCREEN_DP
+        private const val LABEL_BOTTOM_DP = 80f
         private const val LABEL_H_DP = 14f
-        private const val MAIN_BALL_DP = 58f
+        private const val MAIN_BALL_DP = 62f
         private const val MAIN_RIGHT_DP = 16f
-        private const val SAT_BALL_DP = 46f
+        private const val SAT_BALL_DP = 54f
         private const val SAT_GAP_DP = 8f
         private const val SAT_STEP_DP = SAT_BALL_DP + SAT_GAP_DP
         private const val SAT_FIRST_RIGHT_DP = MAIN_RIGHT_DP + MAIN_BALL_DP + SAT_GAP_DP
@@ -140,7 +140,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
             settings.cacheMode = WebSettings.LOAD_NO_CACHE
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            setPadding(0, 0, 0, dp(8f))
+            setPadding(0, 0, 0, dp(92f))
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
@@ -283,7 +283,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
         mainBall.addView(View(context).apply {
             background = Glass.background(
-                    Color.argb(56, 139, 135, 255), Glass.stroke(), dp(29f).toFloat())
+                    Color.argb(66, 139, 135, 255), Glass.stroke(), dp(31f).toFloat())
             Glass.applyBlur(this, 20f)
         }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         mainBallLabel.apply {
@@ -308,6 +308,12 @@ class TransferPage(context: Context) : FrameLayout(context) {
             Glass.applyBlur(this, 20f)
         }
         root.addView(bg, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        root.addView(View(context).apply {
+            setBackgroundColor(Glass.highlight())
+        }, LayoutParams(LayoutParams.MATCH_PARENT, dp(1f), Gravity.TOP).apply {
+            leftMargin = dp(8f)
+            rightMargin = dp(8f)
+        })
         root.addView(TextView(context).apply {
             this.text = text
             this.textSize = textSize

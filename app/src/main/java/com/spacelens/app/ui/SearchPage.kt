@@ -108,6 +108,8 @@ class SearchPage(context: Context) : LinearLayout(context) {
         list.divider = null
         list.dividerHeight = 0
         list.isVerticalScrollBarEnabled = false
+        list.clipToPadding = false
+        list.setPadding(0, 0, 0, dp(92f))
         list.adapter = adapter
         list.setOnItemClickListener { _, _, position, _ ->
             hits.getOrNull(position)?.let { onOpenLocation?.invoke(it.node) }

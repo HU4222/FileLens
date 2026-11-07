@@ -211,6 +211,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
             clipToPadding = false
         }
         body.orientation = VERTICAL
+        body.setPadding(0, 0, 0, dp(92f))
         scroll.addView(body, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         dupSection.addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
@@ -313,6 +314,8 @@ class CleanPage(context: Context) : LinearLayout(context) {
         appList.divider = null
         appList.dividerHeight = 0
         appList.isVerticalScrollBarEnabled = false
+        appList.clipToPadding = false
+        appList.setPadding(0, 0, 0, dp(92f))
         appList.adapter = appAdapter
         appList.setOnItemClickListener { _, _, position, _ ->
             val e = appAdapter.items.getOrNull(position) ?: return@setOnItemClickListener
@@ -377,6 +380,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
             clipToPadding = false
         }
         garbageBody.orientation = VERTICAL
+        garbageBody.setPadding(0, 0, 0, dp(92f))
         scroll.addView(garbageBody, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         garbageSection.addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))

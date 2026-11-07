@@ -103,7 +103,8 @@ class ResponsiveShell(context: Context) : ViewGroup(context) {
             )
             tabH = tabBar.measuredHeight
         }
-        val pagerH = max(0, availableH - topH - tabH)
+        // 胶囊底栏悬浮在内容之上，pager 不再扣掉 tabH。
+        val pagerH = max(0, availableH - topH)
         pager.measure(
                 MeasureSpec.makeMeasureSpec(mainW, MeasureSpec.EXACTLY),
                 MeasureSpec.makeMeasureSpec(pagerH, MeasureSpec.EXACTLY),

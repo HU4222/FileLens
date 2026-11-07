@@ -2,10 +2,14 @@ package com.spacelens.app.ui
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.RectF
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 /** 底部胶囊页签：Canvas 自绘，指示器跟手 + 弹簧收口。 */
 class TabBar(context: Context) : View(context) {
@@ -31,11 +35,12 @@ class TabBar(context: Context) : View(context) {
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec)
-        setMeasuredDimension(w, Draw.dp(context, 66f).toInt())
+        // 62dp 胶囊 + 18dp 离底，视图本身占 80dp；胶囊由 onDraw 画在底部。
+        setMeasuredDimension(w, Draw.dp(context, 80f).toInt())
     }
 
-    private fun contentLeft(): Float = Draw.dp(context, 14f)
-    private fun contentRight(): Float = width - Draw.dp(context, 14f)
+    private fun contentLeft(): Float = Draw.dp(context, 24f)
+    private fun contentRight(): Float = width - Draw.dp(context, 24f)
     private fun itemWidth(): Float = (contentRight() - contentLeft()) / labels.size
 
     fun setPage(index: Int, animate: Boolean) {
@@ -65,40 +70,52 @@ class TabBar(context: Context) : View(context) {
         if (width == 0) return
         val p = Theme.palette
         val d = resources.displayMetrics.density
-        val top = 5f * d
-        val bottom = height - 7f * d
+        val dark = p.dark
+        val capsule = RectF(
+                Draw.dp(context, 12f),
+                height - Draw.dp(context, 18f + 62f),
+                width - Draw.dp(context, 12f),
+                height - Draw.dp(context, 18f),
+        )
+        val radius = 31f * d
+        val fill = if (dark) Color.argb(26, 255, 255, 255) else Color.argb(158, 255, 255, 255)
+        val stroke = if (dark) Color.argb(66, 255, 255, 255) else Color.argb(20, 15, 23, 42)
+        val highlight = if (dark) Color.argb(77, 255, 255, 255) else Color.argb(217, 255, 255, 255)
+        Draw.softShadow(canvas, capsule, radius, d)
+        canvas.drawRoundRect(capsule, radius, radius, Draw.fill(fill))
+        canvas.drawRoundRect(capsule, radius, radius,
+                Draw.stroke(stroke, max(1f, 0.5f * d)))
+        canvas.drawLine(capsule.left + radius, capsule.top + 0.5f * d,
+                capsule.right - radius, capsule.top + 0.5f * d,
+                Draw.stroke(highlight, 1f))
 
-        val glassBg = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        canvas.drawRoundRect(glassBg, Glass.radius() * d, Glass.radius() * d,
-                Draw.fill(Glass.fill()))
-        canvas.drawLine(0f, 0.5f * d, width.toFloat(), 0.5f * d,
-                Draw.stroke(Glass.highlight(), 0.5f * d))
-        canvas.drawLine(0f, 1f * d, width.toFloat(), 1f * d,
-                Draw.stroke(p.line, 1f * d))
-
-        // FileLens 风格：选中项底部一条短靛蓝指示条
         val iw = itemWidth()
-        val indW = 18f * d
-        val indLeft = contentLeft() + progress * iw + (iw - indW) / 2f
-        val indTop = height - 5f * d
-        canvas.drawRoundRect(RectF(indLeft, indTop, indLeft + indW, indTop + 3f * d),
-                1.5f * d, 1.5f * d, Draw.fill(p.brand))
+        val selectedIndex = progress.roundToInt().coerceIn(0, labels.size - 1)
+        val selectedText = Draw.text(context, 10f, p.text)
+        val blockW = max(44f * d, selectedText.measureText(labels[selectedIndex]) + 28f * d)
+        val blockCx = contentLeft() + progress * iw + iw / 2f
+        val block = RectF(blockCx - blockW / 2f, capsule.centerY() - 22f * d,
+                blockCx + blockW / 2f, capsule.centerY() + 22f * d)
+        val blockFill = if (dark) Color.argb(71, 139, 135, 255) else Color.argb(36, 79, 70, 229)
+        canvas.drawRoundRect(block, 20f * d, 20f * d, Draw.fill(blockFill))
+        canvas.drawRoundRect(block, 20f * d, 20f * d,
+                Draw.stroke(Color.argb(56, 255, 255, 255), max(1f, 0.5f * d)))
 
         for (i in labels.indices) {
             val cx = contentLeft() + iw * (i + 0.5f)
-            val k = 1f - Math.abs(progress - i).coerceIn(0f, 1f)
+            val k = 1f - abs(progress - i).coerceIn(0f, 1f)
             val base = if (pressIndex == i) p.text2 else p.muted
             val color = Theme.blend(base, p.brand, k)
             if (pressIndex == i && k < 0.5f) {
-                canvas.drawCircle(cx, top + (bottom - top) * 0.34f, 17f * d,
+                canvas.drawCircle(cx, capsule.centerY() - 7f * d, 17f * d,
                         Draw.fill(Theme.alpha(p.brandSoft, 150)))
             }
-            Draw.icon(canvas, icons[i], cx, top + (bottom - top) * 0.34f,
-                    21f * d, color, 2f * d)
+            Draw.icon(canvas, icons[i], cx, capsule.top + 22f * d,
+                    20f * d, color, 2f * d)
             val tp = Draw.text(context, 10f, color, medium = k > 0.5f)
             val label = labels[i]
             canvas.drawText(label, cx - tp.measureText(label) / 2f,
-                    bottom - 11f * d, tp)
+                    capsule.bottom - 10f * d, tp)
         }
     }
 

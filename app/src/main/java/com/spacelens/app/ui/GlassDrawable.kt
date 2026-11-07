@@ -22,9 +22,9 @@ object Glass {
         Color.argb(36, 255, 255, 255)
     }
 
-    fun stroke(): Int = Color.argb(71, 255, 255, 255)
+    fun stroke(): Int = Color.argb(77, 255, 255, 255)
 
-    fun highlight(): Int = Color.argb(120, 255, 255, 255)
+    fun highlight(): Int = Color.argb(82, 255, 255, 255)
 
     fun background(
             fill: Int = fill(),

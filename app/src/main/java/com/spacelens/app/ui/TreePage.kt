@@ -51,7 +51,10 @@ class TreePage(context: Context) : FrameLayout(context) {
     private var progress: Scanner.ScanProgress? = null
 
     init {
-        val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val column = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, (92 * resources.displayMetrics.density).toInt())
+        }
         column.addView(top, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         selectionBar.visibility = View.GONE

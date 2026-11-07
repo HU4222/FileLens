@@ -152,7 +152,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
             var y = 10f * d + heroH + 12f * d
             y += catH + 14f * d
             y += 22f * d + quickH * 3 + quickGap * 2 + 14f * d
-            y += summaryH + 26f * d + 72f * d
+            y += summaryH + 26f * d + 72f * d + 92f * d
             return y.toInt()
         }
 
