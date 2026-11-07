@@ -243,6 +243,38 @@ class TransferPage(context: Context) : FrameLayout(context) {
         updateUi()
     }
 
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        // 不用写死屏幕 dp：按 TransferPage 的实测高度把球放到胶囊上方 16dp。
+        if (b - t > 0) applyBallGeometry(b - t)
+        super.onLayout(changed, l, t, r, b)
+    }
+
+    private fun applyBallGeometry(hostHeight: Int) {
+        val capsuleTopY = hostHeight - dp(18f + 62f)
+        val ballBottom = hostHeight - (capsuleTopY - dp(16f))
+        val labelBottom = hostHeight - capsuleTopY
+        (mainBall.layoutParams as? LayoutParams)?.let {
+            if (it.bottomMargin != ballBottom) {
+                it.bottomMargin = ballBottom
+                mainBall.layoutParams = it
+            }
+        }
+        for (i in satBalls.indices) {
+            (satBalls[i].layoutParams as? LayoutParams)?.let {
+                if (it.bottomMargin != ballBottom) {
+                    it.bottomMargin = ballBottom
+                    satBalls[i].layoutParams = it
+                }
+            }
+            (satLabels[i].layoutParams as? LayoutParams)?.let {
+                if (it.bottomMargin != labelBottom) {
+                    it.bottomMargin = labelBottom
+                    satLabels[i].layoutParams = it
+                }
+            }
+        }
+    }
+
     private fun buildBalls() {
         scrim.setBackgroundColor(Color.TRANSPARENT)
         scrim.isClickable = true
@@ -444,7 +476,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
             (function(){
               if(document.getElementById('dl-embed-style'))return;
               var s=document.createElement('style');s.id='dl-embed-style';
-              s.textContent='.nav-foot{display:none!important}.brand{display:none!important}';
+              s.textContent='.nav{display:none!important}';
               document.head.appendChild(s);
             })();
         """.trimIndent()
