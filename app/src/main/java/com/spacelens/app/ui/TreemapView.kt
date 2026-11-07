@@ -307,7 +307,9 @@ class TreemapView(context: Context) : View(context) {
             items.add(LayoutItem(max(hiddenSize.toDouble(), rootSize * 0.0008), null, hidden.toIntArray()))
         }
         items.sortByDescending { it.size }
-        val areas = DoubleArray(items.size) { items[it].size }
+        // 视觉地板：小文件不再压成一条线，布局占比与真实字节解耦。
+        val minShare = rootSize * 0.008
+        val areas = DoubleArray(items.size) { max(items[it].size, minShare) }
         val rects = Squarify.layoutAreas(areas, bounds)
         for (i in items.indices) {
             val r = rects.getOrNull(i) ?: continue
