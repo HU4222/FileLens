@@ -17,12 +17,5 @@ if not exist "%CD%\.tmp" mkdir "%CD%\.tmp" >nul 2>&1
 set "TEMP=%CD%\.tmp"
 set "TMP=%CD%\.tmp"
 
-rem The wrapper distribution is not cached on this machine; reuse the local
-rem Gradle 8.7 that the existing Android projects already use.
-set "LOCAL_GRADLE=C:\ProgramData\WorkBuddy\chromium-env\cu061j\WorkBuddy\HU4222\droplink_android\gradle-8.7\bin\gradle.bat"
-if exist "%LOCAL_GRADLE%" (
-  call "%LOCAL_GRADLE%" -p "%CD%" assembleDebug --no-daemon
-) else (
-  call gradlew.bat assembleDebug
-)
+call gradlew.bat assembleDebug --no-daemon
 exit /b %ERRORLEVEL%
