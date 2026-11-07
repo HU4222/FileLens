@@ -195,8 +195,14 @@ class SwipePager(context: Context) : ViewGroup(context) {
     }
 
     private fun applySettledVisibility() {
-        for (i in 0 until childCount) {
-            getChildAt(i).visibility = if (i == currentPage) VISIBLE else INVISIBLE
+        val page = currentPage
+        // 延后一帧再隐藏旧页：等新页完成这一帧的绘制，避免短空档。
+        post {
+            if (anim == null && !dragging && currentPage == page && scrollX == page * width) {
+                for (i in 0 until childCount) {
+                    getChildAt(i).visibility = if (i == page) VISIBLE else INVISIBLE
+                }
+            }
         }
     }
 

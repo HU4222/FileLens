@@ -20,6 +20,8 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.spacelens.app.core.Classifier
 import com.spacelens.app.core.Fmt
 import com.spacelens.app.core.NodeStore
@@ -47,6 +49,9 @@ class SearchPage(context: Context) : LinearLayout(context) {
     private var hits: List<Hit> = emptyList()
     private var total = 0
     private var lastQuery = ""
+    private var lastSignature = ""
+    private var inFlightSignature = ""
+    private var hasResult = false
     private var rendering = false
 
     private val types = LinkedHashSet<Int>()
@@ -123,15 +128,23 @@ class SearchPage(context: Context) : LinearLayout(context) {
     }
 
     fun onShown() {
-        if (store == null) {
+        val snapshot = store
+        val q = query.text?.toString()?.trim().orEmpty()
+        if (snapshot == null || snapshot.count <= 1) {
             status.text = "先扫描一次，再搜索"
-        } else {
-            schedule(query.text?.toString()?.trim().orEmpty())
+            dismissImeIfVisible()
+            return
         }
-        // 不自动聚焦：用户点输入框才弹键盘，避免切页时键盘重排造成闪动。
-        query.clearFocus()
-        (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
-                ?.hideSoftInputFromWindow(query.windowToken, 0)
+        val sig = signature(q)
+        // 有缓存先原地显示；同一条件不重复查询，避免先空后满的闪屏。
+        if (hasResult && sig == lastSignature) {
+            renderStatus()
+            dismissImeIfVisible()
+            return
+        }
+        if (hasResult) renderStatus()
+        if (sig != inFlightSignature) schedule(q)
+        dismissImeIfVisible()
     }
 
     fun refresh() {
@@ -191,8 +204,26 @@ class SearchPage(context: Context) : LinearLayout(context) {
         chips.addView(tv, lp)
     }
 
+    private fun signature(q: String): String =
+            "$q|${types.sorted().joinToString(",")}|$sizeMode|$timeMode|${store?.count ?: 0}"
+
+    private fun dismissImeIfVisible() {
+        val imeVisible = ViewCompat.getRootWindowInsets(this)
+                ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        if (!imeVisible) return
+        query.clearFocus()
+        (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                ?.hideSoftInputFromWindow(query.windowToken, 0)
+    }
+
     private fun schedule(q: String) {
+        val sig = signature(q)
+        if (hasResult && sig == lastSignature) {
+            renderStatus()
+            return
+        }
         pending?.let { handler.removeCallbacks(it) }
+        inFlightSignature = sig
         val job = Runnable { perform(q) }
         pending = job
         handler.postDelayed(job, 250L)
@@ -200,10 +231,16 @@ class SearchPage(context: Context) : LinearLayout(context) {
 
     private fun perform(q: String) {
         lastQuery = q
+        val sig = signature(q)
+        if (hasResult && sig == lastSignature) return
+        inFlightSignature = sig
         val snapshot = store
         if (snapshot == null || snapshot.count <= 1) {
             hits = emptyList()
             total = 0
+            hasResult = true
+            lastSignature = sig
+            inFlightSignature = ""
             adapter.notifyDataSetChanged()
             status.text = if (snapshot == null) "先扫描一次，再搜索" else "还没扫描，先到「空间」页扫描"
             return
@@ -211,6 +248,9 @@ class SearchPage(context: Context) : LinearLayout(context) {
         if (q.isEmpty() && types.isEmpty() && sizeMode == 0 && timeMode == 0) {
             hits = emptyList()
             total = 0
+            hasResult = true
+            lastSignature = sig
+            inFlightSignature = ""
             adapter.notifyDataSetChanged()
             status.text = "输入关键词或选择过滤条件"
             return
@@ -257,6 +297,9 @@ class SearchPage(context: Context) : LinearLayout(context) {
                 if (gen != seq.get() || lastQuery != q) return@post
                 hits = found
                 total = n
+                hasResult = true
+                lastSignature = sig
+                inFlightSignature = ""
                 adapter.notifyDataSetChanged()
                 renderStatus()
             }
