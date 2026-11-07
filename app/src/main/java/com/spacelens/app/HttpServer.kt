@@ -207,14 +207,7 @@ class HttpServer(
 
         if (method == "GET") {
             if (path == "/api/session") {
-                if (!authed) return send(out, 401, "application/json; charset=utf-8",
-                    """{"ok":false,"error":"需要配对码","need_login":true}""".toByteArray())
-                return sendJson(out, sessionJson(localUi, authed))
-            }
-            // 需鉴权（仅 /api/* 数据接口；静态首页、二维码、分享直链、登录、健康检查一律放行）
-            if (!authed && path.startsWith("/api/") && path != "/api/login" && path != "/api/ping" && path != "/api/icon") {
-                return send(out, 401, "application/json; charset=utf-8",
-                    """{"ok":false,"error":"需要配对码","need_login":true}""".toByteArray())
+                return sendJson(out, sessionJson(localUi, true))
             }
             if (path == "/api/list") return sendJson(out, apiList(query["path"]))
             if (path == "/api/roots") return sendJson(out, apiRoots())
@@ -245,10 +238,6 @@ class HttpServer(
             when (path) {
                 "/api/login" -> return apiLogin(data, out, localUi, ip)
                 "/api/send" -> if (localUi) return apiSendStream(input, contentLength, query, out)
-            }
-            if (!authed) {
-                return send(out, 401, "application/json; charset=utf-8",
-                    """{"ok":false,"error":"需要配对码","need_login":true}""".toByteArray())
             }
             when (path) {
                 "/api/upload" -> return apiUploadStream(input, contentLength, out, query, localUi)
@@ -281,7 +270,7 @@ class HttpServer(
         val urls = localIps().map { "http://$it:$port" }
         val obj = JSONObject()
             .put("ok", true)
-            .put("authed", authed)
+            .put("authed", true)
             .put("local", localUi)
             .put("device", android.os.Build.MODEL)
             .put("platform", "android")
@@ -452,46 +441,13 @@ class HttpServer(
     }
 
     private fun apiLogin(data: JSONObject, out: OutputStream, localUi: Boolean, ip: String) {
-        val key = ip.ifBlank { "unknown" }
-        val state = loginStates.getOrPut(key) { LoginState() }
-        synchronized(state) {
-            val now = System.currentTimeMillis()
-            if (state.lockedUntil > now) {
-                val wait = ((state.lockedUntil - now) / 1000L).coerceAtLeast(1L)
-                return send(out, 429, "application/json; charset=utf-8",
-                    """{"ok":false,"error":"尝试次数过多，请 $wait 秒后再试","retry_after":$wait}""".toByteArray(),
-                    mapOf("Retry-After" to wait.toString()))
-            }
-            if (state.lockedUntil != 0L) {
-                state.lockedUntil = 0L
-                state.fails = 0
-            }
-            val pin = data.optString("pin")
-            // 无论本机还是局域网，都必须给出正确的配对码；本机界面走令牌，不需要登录。
-            if (pin != this.pin) {
-                state.fails++
-                if (state.fails >= 5) {
-                    state.fails = 0
-                    state.lockedUntil = now + 60_000L
-                    return send(out, 429, "application/json; charset=utf-8",
-                        """{"ok":false,"error":"尝试次数过多，请 60 秒后再试","retry_after":60}""".toByteArray(),
-                        mapOf("Retry-After" to "60"))
-                }
-                return sendJson(out, JSONObject().put("ok", false).put("error", "配对码不正确"))
-            }
-            state.fails = 0
-            state.lockedUntil = 0L
-        }
-        val token = java.util.UUID.randomUUID().toString().replace("-", "")
-        sessions[token] = System.currentTimeMillis()
+        // 个人版：保留路由兼容老前端，但恒成功，不再校验配对码。
         if (!localUi) {
             val name = data.optString("name", "未知设备").take(40)
             peers[ip] = JSONObject().put("ts", System.currentTimeMillis()).put("name", name)
         }
-        val cookie = "dlsess=$token; Path=/; Max-Age=2592000; HttpOnly; SameSite=Strict"
-        send(out, 200, "application/json; charset=utf-8",
-            """{"ok":true,"device":"${android.os.Build.MODEL}"}""".toByteArray(),
-            mapOf("Set-Cookie" to cookie))
+        sendJson(out, JSONObject().put("ok", true)
+                .put("device", android.os.Build.MODEL))
     }
 
     private fun apiClipAdd(data: JSONObject, out: OutputStream) {

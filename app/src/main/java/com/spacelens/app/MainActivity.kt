@@ -588,7 +588,7 @@ class MainActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == TransferPage.REQ_FILE) {
+        if (requestCode == TransferPage.REQ_FILE || requestCode == TransferPage.REQ_SCAN) {
             if (::transferPage.isInitialized) {
                 transferPage.onActivityResult(requestCode, resultCode, data)
             }

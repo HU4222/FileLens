@@ -1,6 +1,7 @@
 package com.spacelens.app.ui
 
 import android.Manifest
+import com.spacelens.app.QrScannerActivity
 import android.app.DownloadManager
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -51,6 +52,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
     companion object {
         const val REQ_FILE = 5010
+        const val REQ_SCAN = 5011
         private const val TABBAR_H_DP = 80f
         private const val BALL_BOTTOM_SCREEN_DP = 116f
         // 1.2.0 起 pager 延伸到屏幕底，胶囊悬浮在上面；球位置直接用屏幕坐标。
@@ -69,6 +71,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private val status = TextView(context)
     private val port = TextView(context)
     private val refresh = TextView(context)
+    private val qrButton = TextView(context)
     private val stateToggle = LinearLayout(context)
     private val stateDot = View(context)
     private val stateText = TextView(context)
@@ -90,6 +93,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private var stopping = false
     private var manualStopped = false
     private var pendingShowPanel = false
+    private var startFailed = false
     var onPanelVisibility: ((Boolean) -> Unit)? = null
     private var loadedUrl = ""
     private var panelShown = false
@@ -139,7 +143,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
             setTextColor(Theme.palette.brand)
             setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
             visibility = View.GONE
-            setOnClickListener { showPanel() }
+            setOnClickListener { openAbout() }
         }
         bar.addView(port, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -160,6 +164,19 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         refreshLp.leftMargin = dp(4f)
         bar.addView(refresh, refreshLp)
+
+        qrButton.apply {
+            text = "二维码"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.text2)
+            setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
+            setOnClickListener { openAbout() }
+        }
+        val qrLp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        qrLp.leftMargin = dp(2f)
+        bar.addView(qrButton, qrLp)
 
         stateToggle.apply {
             orientation = LinearLayout.HORIZONTAL
@@ -203,6 +220,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
                     super.onPageFinished(view, url)
                     injectEmbedCss(view)
                     injectViewBridge(view)
+                    if (TransferService.running) injectLocalCard()
                 }
             }
             webChromeClient = object : WebChromeClient() {
@@ -256,6 +274,19 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 @JavascriptInterface
                 fun onViewChanged(view: String) {
                     handler.post { updateBallLabel(view) }
+                }
+
+                @JavascriptInterface
+                fun pin(): String = TransferService.pin
+
+                @JavascriptInterface
+                fun stopService() {
+                    handler.post { this@TransferPage.stopService() }
+                }
+
+                @JavascriptInterface
+                fun scanQr() {
+                    handler.post { this@TransferPage.scanQr() }
                 }
             }, "__dlNative")
         }
@@ -329,8 +360,6 @@ class TransferPage(context: Context) : FrameLayout(context) {
         addView(closedView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
         buildBalls()
-        buildPanel()
-        addView(panel, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         updateUi()
     }
 
@@ -781,7 +810,66 @@ class TransferPage(context: Context) : FrameLayout(context) {
         return false
     }
 
+    private fun openAbout() {
+        web.evaluateJavascript(
+                "if(window.__dlSwitchView)__dlSwitchView('about');" +
+                        "document.querySelector('[data-view=\"about\"]')?.click();" +
+                        "setTimeout(function(){var e=document.getElementById('dl-local-card');" +
+                        "if(e)e.scrollIntoView({block:'start'});},120);", null)
+        handler.postDelayed({ injectLocalCard() }, 180L)
+    }
+
+    private fun injectLocalCard() {
+        if (!TransferService.running) return
+        val js = """
+            (function(){
+              var host='http://'+location.host;
+              var el=document.getElementById('dl-local-card');
+              if(!el){
+                el=document.createElement('div'); el.id='dl-local-card'; el.className='card';
+                var body=document.getElementById('aboutBody');
+                if(body) body.insertBefore(el,body.firstChild);
+              }
+              el.innerHTML='<div class="card-title">本机连接信息</div>'+
+                '<div class="mono" style="font-size:15px;word-break:break-all">'+host+'</div>'+
+                '<img src="/qr.png?text='+encodeURIComponent(host)+'" style="width:180px;height:180px;margin:10px auto;display:block;border-radius:8px">'+
+                '<button class="btn btn-primary" onclick="navigator.clipboard.writeText(\''+host+'\')">复制地址</button> '+
+                '<button class="btn" onclick="__dlNative.scanQr()">扫码连接</button> '+
+                '<button class="btn btn-danger" onclick="__dlNative.stopService()">停止服务</button>'+
+                '<div style="margin-top:8px;color:#8b93a7;font-size:10px">个人模式 · 同一 Wi-Fi 下的设备无需密码即可访问</div>';
+            })();
+        """.trimIndent()
+        web.evaluateJavascript(js, null)
+    }
+
+    private fun scanQr() {
+        val activity = context as? android.app.Activity ?: return
+        try {
+            activity.startActivityForResult(
+                    Intent(activity, QrScannerActivity::class.java), REQ_SCAN)
+        } catch (t: Throwable) {
+            toast("无法打开扫码页：${t.message ?: "相机不可用"}")
+        }
+    }
+
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQ_SCAN) {
+            if (resultCode == android.app.Activity.RESULT_OK) {
+                val text = data?.getStringExtra(QrScannerActivity.EXTRA_RESULT).orEmpty()
+                val ok = Regex("^https?://[^\\s]+$").matches(text)
+                if (!ok) {
+                    toast("不是有效的连接码")
+                } else {
+                    web.evaluateJavascript(
+                            "(function(){var u=${org.json.JSONObject.quote(text)};" +
+                                    "var i=document.querySelector('#peerUrl,#url,input[type=url]');" +
+                                    "if(i){i.value=u;i.dispatchEvent(new Event('input',{bubbles:true}));}" +
+                                    "var b=Array.from(document.querySelectorAll('button')).find(function(x){return /连接/.test(x.textContent);});" +
+                                    "if(b)b.click();})();", null)
+                }
+            }
+            return
+        }
         if (requestCode != REQ_FILE) return
         val callback = fileCallback
         fileCallback = null
@@ -811,6 +899,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
                     activity, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 5002)
         }
         starting = true
+        startFailed = false
         errorView.visibility = GONE
         closedView.visibility = GONE
         status.text = "传输 · " + Build.MODEL
@@ -831,10 +920,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 if (TransferService.running) {
                     starting = false
                     updateUi()
-                    if (pendingShowPanel) {
-                        pendingShowPanel = false
-                        showPanel()
-                    }
+                    handler.postDelayed({ openAbout() }, 900L)
                     return
                 }
                 if (tries >= 25) {
@@ -930,6 +1016,10 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 color = Color.rgb(34, 197, 94)
                 label = "开启"
             }
+            startFailed -> {
+                color = Color.rgb(156, 163, 175)
+                label = "启动失败"
+            }
             else -> {
                 color = Color.rgb(245, 158, 11)
                 label = "关闭"
@@ -950,6 +1040,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private fun fail(message: String) {
         starting = false
         pendingShowPanel = false
+        startFailed = true
         status.text = "传输 · " + Build.MODEL + " · 未启动"
         status.setTextColor(Theme.palette.muted)
         errorText.text = message
