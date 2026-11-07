@@ -82,7 +82,11 @@ class TreePage(context: Context) : FrameLayout(context) {
         addView(column, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         treemap.setLayoutMode(metrics.maxDepth, metrics.maxBlocks)
 
-        treemap.onDrill = { node -> showRoot(node) }
+        treemap.onDrill = { node ->
+            val depth = store?.depthOf(node) ?: 0
+            android.util.Log.i("FileLensTree", "drill node=$node depth=$depth")
+            if (depth <= 6) showRoot(node)
+        }
         treemap.onNodeTap = { node -> onFileTap?.invoke(node) }
         treemap.onLongPressNode = { node -> onNodeLongPress?.invoke(node) }
         treemap.onAggregateTap = { nodes -> onAggregateTap?.invoke(nodes) }
@@ -319,6 +323,7 @@ class TreePage(context: Context) : FrameLayout(context) {
     fun showRoot(node: Int) {
         val s = store ?: return
         if (node !in 0 until s.count) return
+        if (s.depthOf(node) > 6) return
         rootIndex = node
         treemap.setRoot(node)
         top.invalidate()

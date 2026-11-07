@@ -83,7 +83,15 @@ class RankPage(
         val sum = top.sumOf { it.size }
         body.addView(info("前 ${top.size} 占 ${Fmt.bytes(sum)} · 占已用 " +
                 "%.1f%%".format(sum * 100.0 / used)))
-        for (f in top) body.addView(fileRow(f, showFolder = true))
+        for ((rowIndex, f) in top.withIndex()) {
+            val lp = LayoutParams(LayoutParams.MATCH_PARENT, dp(56f))
+            if (rowIndex > 0) lp.topMargin = dp(4f)
+            body.addView(fileRow(f, showFolder = true), lp)
+        }
+        if (body.childCount != 1 + top.size) {
+            android.util.Log.e("FileLensRank",
+                    "rank rows mismatch: body=${body.childCount} top=${top.size}")
+        }
     }
 
     private fun showDir(index: Int) {
@@ -136,6 +144,7 @@ class RankPage(
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(8f), 0, dp(8f))
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dp(56f))
         }
         val icon = object : View(context) {
             override fun onDraw(canvas: android.graphics.Canvas) {

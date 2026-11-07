@@ -95,6 +95,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private var pendingShowPanel = false
     private var startFailed = false
     var onPanelVisibility: ((Boolean) -> Unit)? = null
+    var onSheetVisibility: ((Boolean) -> Unit)? = null
+    private var sheetOpen = false
     private var loadedUrl = ""
     private var panelShown = false
     private var fileCallback: ValueCallback<Array<Uri>>? = null
@@ -287,6 +289,11 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 @JavascriptInterface
                 fun scanQr() {
                     handler.post { this@TransferPage.scanQr() }
+                }
+
+                @JavascriptInterface
+                fun onSheet(open: Boolean) {
+                    handler.post { setWebSheetOpen(open) }
                 }
             }, "__dlNative")
         }
@@ -676,6 +683,20 @@ class TransferPage(context: Context) : FrameLayout(context) {
               },true);
               setTimeout(notify,0);
             })();
+            (function(){
+              if(window.__flSheetHooked)return; window.__flSheetHooked=true;
+              window.__dlSheet=function(o){try{window.__dlNative.onSheet(!!o)}catch(e){}};
+              var last=false;
+              function check(){
+                var el=document.getElementById('sheet')||document.querySelector('.sheet');
+                var open=!!(el&&el.offsetParent!==null&&getComputedStyle(el).display!=='none'&&
+                  el.getBoundingClientRect().height>0);
+                if(open!==last){last=open;window.__dlSheet(open);}
+              }
+              new MutationObserver(check).observe(document.body,
+                {attributes:true,subtree:true,attributeFilter:['class','style']});
+              setInterval(check,300);
+            })();
         """.trimIndent()
         view?.evaluateJavascript(js, null)
     }
@@ -808,6 +829,24 @@ class TransferPage(context: Context) : FrameLayout(context) {
             return true
         }
         return false
+    }
+
+    private fun setWebSheetOpen(open: Boolean) {
+        if (sheetOpen == open) return
+        sheetOpen = open
+        if (open) {
+            collapseBalls()
+            mainBall.animate().alpha(0f).scaleX(0.9f).scaleY(0.9f)
+                    .setDuration(150L).withEndAction { mainBall.visibility = View.GONE }.start()
+            onSheetVisibility?.invoke(true)
+        } else {
+            mainBall.animate().cancel()
+            mainBall.visibility = if (TransferService.running) View.VISIBLE else View.GONE
+            mainBall.alpha = 1f
+            mainBall.scaleX = 1f
+            mainBall.scaleY = 1f
+            onSheetVisibility?.invoke(false)
+        }
     }
 
     private fun openAbout() {

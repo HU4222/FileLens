@@ -177,6 +177,18 @@ class MainActivity : Activity() {
         cleanPage.onTrashClick = { showTrashPage() }
         transferPage = TransferPage(this)
         transferPage.onPanelVisibility = { open -> tabBar.isEnabled = !open }
+        transferPage.onSheetVisibility = { open ->
+            tabBar.isEnabled = !open
+            if (open) {
+                tabBar.animate().alpha(0f).setDuration(150L)
+                        .withEndAction { tabBar.visibility = View.GONE }.start()
+            } else {
+                tabBar.animate().cancel()
+                tabBar.visibility = View.VISIBLE
+                tabBar.alpha = 0f
+                tabBar.animate().alpha(1f).setDuration(150L).start()
+            }
+        }
 
         pager.addView(overviewPage, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
@@ -92,6 +93,14 @@ class PreviewPage(
         stage.removeAllViews()
         val f = File(paths[index])
         name.text = f.name
+        if (!f.exists()) {
+            showError("文件不存在")
+            return
+        }
+        if (!f.canRead()) {
+            showError("没有读取权限")
+            return
+        }
         val ext = f.extension.lowercase()
         when {
             ext in setOf("jpg", "jpeg", "png", "webp", "gif", "heic") -> showImage(f)
@@ -103,19 +112,57 @@ class PreviewPage(
     }
 
     private fun showImage(f: File) {
+        val bitmap = decodeSampled(f, 2048)
+        if (bitmap == null) {
+            showError("无法解码该图片")
+            return
+        }
         val iv = ZoomImage(context)
-        iv.setImageBitmap(decodeSampled(f, 2048))
+        iv.setImageBitmap(bitmap)
         stage.addView(iv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
     private fun decodeSampled(f: File, target: Int): Bitmap? {
-        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(f.absolutePath, opts)
-        var sample = 1
-        while (max(opts.outWidth, opts.outHeight) / sample > target * 2) sample *= 2
-        opts.inJustDecodeBounds = false
-        opts.inSampleSize = sample
-        return try { BitmapFactory.decodeFile(f.absolutePath, opts) } catch (_: Throwable) { null }
+        // API 28+ 先走 ImageDecoder，按目标尺寸解码，避免原图整张进内存。
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            try {
+                val source = ImageDecoder.createSource(f)
+                return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                    val w = info.size.width
+                    val h = info.size.height
+                    val scale = minOf(1f, target.toFloat() / max(w, h).toFloat())
+                    decoder.setTargetSize(max(1, (w * scale).toInt()),
+                            max(1, (h * scale).toInt()))
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        // 降级 1：BitmapFactory 采样。
+        try {
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(f.absolutePath, opts)
+            var sample = 1
+            while (opts.outWidth > 0 && max(opts.outWidth, opts.outHeight) / sample > target * 2) {
+                sample *= 2
+            }
+            opts.inJustDecodeBounds = false
+            opts.inSampleSize = sample
+            BitmapFactory.decodeFile(f.absolutePath, opts)?.let { return it }
+        } catch (_: Throwable) {
+        }
+        // 降级 2：原图（仅在小图/解码器特殊格式时兜底）。
+        return try { BitmapFactory.decodeFile(f.absolutePath) } catch (_: Throwable) { null }
+    }
+
+    private fun showError(message: String) {
+        stage.removeAllViews()
+        stage.addView(TextView(context).apply {
+            text = "$message\n${File(paths[index]).name}"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        stage.addView(button("用其他应用打开") { openCurrent() })
     }
 
     private fun showVideo(f: File) {
