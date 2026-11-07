@@ -36,6 +36,7 @@ class SearchPage(context: Context) : LinearLayout(context) {
     var store: NodeStore? = null
     var rootPath: String = ""
     var onOpenLocation: ((Int) -> Unit)? = null
+    var onPreview: ((Int) -> Unit)? = null
     var onDeleteRequested: ((Int) -> Unit)? = null
 
     private val query = EditText(context)
@@ -112,7 +113,9 @@ class SearchPage(context: Context) : LinearLayout(context) {
         list.setPadding(0, 0, 0, dp(92f))
         list.adapter = adapter
         list.setOnItemClickListener { _, _, position, _ ->
-            hits.getOrNull(position)?.let { onOpenLocation?.invoke(it.node) }
+            hits.getOrNull(position)?.let {
+                if (onPreview != null) onPreview?.invoke(it.node) else onOpenLocation?.invoke(it.node)
+            }
         }
         list.setOnItemLongClickListener { _, _, position, _ ->
             val hit = hits.getOrNull(position) ?: return@setOnItemLongClickListener false
