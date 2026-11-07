@@ -534,9 +534,11 @@ class CleanPage(context: Context) : LinearLayout(context) {
         updateGarbageSummary()
     }
 
-    private fun garbageSelectable(node: Int): Boolean =
-            DeletePolicy.decide(context, store = store ?: return false,
-                    node = node, rootPath = rootPath).selectable
+    private fun garbageSelectable(node: Int): Boolean {
+        val snapshot = store ?: return false
+        return DeletePolicy.decide(context, store = snapshot,
+                node = node, rootPath = rootPath).selectable
+    }
 
     private fun selectAllGarbage(selected: Boolean) {
         for (cat in garbageCategories) {
