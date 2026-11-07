@@ -51,11 +51,14 @@ class SwipePager(context: Context) : ViewGroup(context) {
             return
         }
         val from = scrollX.toFloat()
-        anim = Motion.tween(MotionDurations.PAGE, Ease::softOut, { t ->
+        val duration = settleDuration(from, to.toFloat(), 0f)
+        anim = Motion.tween(duration, Ease::inOutCubic, { t ->
             scrollX = (from + (to - from) * t).roundToInt()
+            onProgress?.invoke(scrollX / width.toFloat())
             updatePageTransforms()
         }, {
             currentPage = target
+            onProgress?.invoke(target.toFloat())
             updatePageTransforms()
             applySettledVisibility()
             onPageChanged?.invoke(target)
@@ -147,7 +150,7 @@ class SwipePager(context: Context) : ViewGroup(context) {
                     page = if (vx < 0) currentPage + 1 else currentPage - 1
                 }
                 page = page.coerceIn(0, childCount - 1)
-                settleTo(page)
+                settleTo(page, if (ev.actionMasked == MotionEvent.ACTION_UP) vx else 0f)
                 velocity?.recycle()
                 velocity = null
                 if (dragging) {
@@ -160,20 +163,30 @@ class SwipePager(context: Context) : ViewGroup(context) {
         return super.onTouchEvent(ev)
     }
 
-    private fun settleTo(page: Int) {
+    private fun settleTo(page: Int, velocityX: Float) {
         val from = scrollX.toFloat()
         val to = (page * width).toFloat()
+        val duration = settleDuration(from, to, velocityX)
         anim?.cancel()
         showAllPages()
-        anim = Motion.tween(MotionDurations.PAGE, Ease::softOut, { t ->
+        anim = Motion.tween(duration, Ease::inOutCubic, { t ->
             scrollX = (from + (to - from) * t).roundToInt()
+            onProgress?.invoke(scrollX / width.toFloat())
             updatePageTransforms()
         }, {
             currentPage = page
+            onProgress?.invoke(page.toFloat())
             updatePageTransforms()
             applySettledVisibility()
             onPageChanged?.invoke(page)
         })
+    }
+
+    /** 距离越短、速度越快，收口越短；限制在 120..320ms。 */
+    private fun settleDuration(from: Float, to: Float, velocityX: Float): Int {
+        val distance = abs(to - from)
+        val speed = maxOf(abs(velocityX), 800f)
+        return (distance / speed * 1000f).roundToInt().coerceIn(120, 320)
     }
 
     /** 动画/拖动期间所有页可见；停稳后只让当前页参与绘制，避免旧页继续 invalidate 造成残影。 */

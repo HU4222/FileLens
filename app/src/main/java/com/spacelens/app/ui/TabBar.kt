@@ -1,8 +1,6 @@
 package com.spacelens.app.ui
 
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import android.graphics.Canvas
 import android.graphics.RectF
 import android.view.MotionEvent
@@ -26,9 +24,6 @@ class TabBar(context: Context) : View(context) {
     private var downY = 0f
     private var moved = false
     private val slop = ViewConfiguration.get(context).scaledTouchSlop
-    private var springAnim: Motion.Animation? = null
-    private val handler = Handler(Looper.getMainLooper())
-    private var pendingSpring: Runnable? = null
 
     init {
         isClickable = true
@@ -47,44 +42,23 @@ class TabBar(context: Context) : View(context) {
         val target = index.coerceIn(0, labels.size - 1)
         selected = target
         if (!animate) {
-            springAnim?.cancel()
             progress = target.toFloat()
             invalidate()
-        } else {
-            pendingSpring?.let { handler.removeCallbacks(it) }
-            val job = Runnable { springTo(target.toFloat()) }
-            pendingSpring = job
-            handler.postDelayed(job, 60L)
         }
+        // animate=true 时不自己动：等 SwipePager 的 onProgress 逐帧喂进度。
     }
 
-    /** 跟手：pager 拖动时实时移动指示器。 */
+    /** 跟手：pager 拖动/收口时实时移动指示器。 */
     fun setSwipeProgress(p: Float) {
-        pendingSpring?.let { handler.removeCallbacks(it) }
-        pendingSpring = null
-        springAnim?.cancel()
         progress = p.coerceIn(0f, (labels.size - 1).toFloat())
         invalidate()
     }
 
     fun finishSwipe(index: Int) {
-        pendingSpring?.let { handler.removeCallbacks(it) }
-        pendingSpring = null
         selected = index.coerceIn(0, labels.size - 1)
-        springTo(selected.toFloat())
-    }
-
-    private fun springTo(target: Float) {
-        springAnim?.cancel()
-        val start = progress
-        springAnim = Motion.tween(
-                MotionDurations.INDICATOR,
-                Ease::softOut,
-                update = {
-                    progress = start + (target - start) * it
-                    postInvalidateOnAnimation()
-                },
-        )
+        // pager 的最后一帧 onProgress 已到终点，这里只兜底对齐，不再补动画。
+        progress = selected.toFloat()
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -107,19 +81,16 @@ class TabBar(context: Context) : View(context) {
 
         for (i in labels.indices) {
             val cx = contentLeft() + iw * (i + 0.5f)
-            val active = i == selected
-            val color = when {
-                active -> p.brand
-                pressIndex == i -> p.text2
-                else -> p.muted
-            }
-            if (pressIndex == i && !active) {
+            val k = 1f - Math.abs(progress - i).coerceIn(0f, 1f)
+            val base = if (pressIndex == i) p.text2 else p.muted
+            val color = Theme.blend(base, p.brand, k)
+            if (pressIndex == i && k < 0.5f) {
                 canvas.drawCircle(cx, top + (bottom - top) * 0.34f, 17f * d,
                         Draw.fill(Theme.alpha(p.brandSoft, 150)))
             }
             Draw.icon(canvas, icons[i], cx, top + (bottom - top) * 0.34f,
                     21f * d, color, 2f * d)
-            val tp = Draw.text(context, 10f, color, medium = active)
+            val tp = Draw.text(context, 10f, color, medium = k > 0.5f)
             val label = labels[i]
             canvas.drawText(label, cx - tp.measureText(label) / 2f,
                     bottom - 11f * d, tp)
