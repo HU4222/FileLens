@@ -1,5 +1,7 @@
 package com.spacelens.app.ui
 
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -14,6 +16,19 @@ import kotlin.math.max
 object Glass {
 
     const val RADIUS_DP = 18f
+
+    private val noisePaint: Paint by lazy {
+        val tile = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888)
+        for (y in 0 until 4) {
+            for (x in 0 until 4) {
+                tile.setPixel(x, y, if ((x + y) % 3 == 0) Color.WHITE else Color.TRANSPARENT)
+            }
+        }
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = BitmapShader(tile, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+            alpha = 8
+        }
+    }
 
     fun radius(): Float = RADIUS_DP
 
@@ -61,6 +76,7 @@ object Glass {
                     Color.TRANSPARENT, Color.argb(26, 0, 0, 0), Shader.TileMode.CLAMP)
         }
         canvas.drawRect(bottom, bottomPaint)
+        canvas.drawRect(rect, noisePaint)
         canvas.restore()
 
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

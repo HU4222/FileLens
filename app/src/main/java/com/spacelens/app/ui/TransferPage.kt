@@ -55,17 +55,19 @@ class TransferPage(context: Context) : FrameLayout(context) {
         private const val BALL_BOTTOM_SCREEN_DP = 96f
         // 1.2.0 起 pager 延伸到屏幕底，胶囊悬浮在上面；球位置直接用屏幕坐标。
         private const val BALL_BOTTOM_DP = BALL_BOTTOM_SCREEN_DP
-        private const val LABEL_BOTTOM_DP = 80f
         private const val LABEL_H_DP = 14f
+        private const val LABEL_WIDTH_DP = 60f
         private const val MAIN_BALL_DP = 62f
         private const val MAIN_RIGHT_DP = 16f
         private const val SAT_BALL_DP = 54f
         private const val SAT_GAP_DP = 8f
         private const val SAT_STEP_DP = SAT_BALL_DP + SAT_GAP_DP
-        private const val SAT_FIRST_RIGHT_DP = MAIN_RIGHT_DP + MAIN_BALL_DP + SAT_GAP_DP
+        private const val SAT_FIRST_BOTTOM_DP = BALL_BOTTOM_DP + MAIN_BALL_DP + SAT_GAP_DP
+        private const val LABEL_RIGHT_DP = MAIN_RIGHT_DP + SAT_BALL_DP + 8f
     }
 
     private val status = TextView(context)
+    private val refresh = TextView(context)
     private val other = TextView(context)
     private val web = WebView(context)
     private val errorView = LinearLayout(context)
@@ -114,11 +116,27 @@ class TransferPage(context: Context) : FrameLayout(context) {
             setBackgroundColor(Theme.palette.panel)
         }
         status.apply {
-            text = "未启动"
+            text = "传输 · " + Build.MODEL + " · 未启动"
             textSize = 13f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
             setTextColor(Theme.palette.muted)
         }
         bar.addView(status, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        refresh.apply {
+            text = "刷新"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.text2)
+            setPadding(dp(10f), dp(6f), dp(10f), dp(6f))
+            background = rounded(Theme.palette.panelSunken, Theme.palette.line, Radius.PILL)
+            setOnClickListener {
+                web.reload()
+                readCurrentView()
+            }
+        }
+        bar.addView(refresh, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         other.apply {
             text = "其他设备"
             textSize = 12f
@@ -128,8 +146,10 @@ class TransferPage(context: Context) : FrameLayout(context) {
             background = rounded(Theme.palette.brandSoft, Theme.palette.brandSoft, Radius.PILL)
             setOnClickListener { showPanel() }
         }
-        bar.addView(other, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        val otherLp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        otherLp.leftMargin = dp(6f)
+        bar.addView(other, otherLp)
         content.addView(bar, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dp(48f)))
@@ -253,18 +273,19 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
     private fun applyBallGeometry(hostHeight: Int) {
         val capsuleTopY = hostHeight - dp(18f + 62f)
-        val ballBottom = hostHeight - (capsuleTopY - dp(16f))
-        val labelBottom = hostHeight - capsuleTopY
+        val mainBottom = hostHeight - (capsuleTopY - dp(16f))
         (mainBall.layoutParams as? LayoutParams)?.let {
-            if (it.bottomMargin != ballBottom) {
-                it.bottomMargin = ballBottom
+            if (it.bottomMargin != mainBottom) {
+                it.bottomMargin = mainBottom
                 mainBall.layoutParams = it
             }
         }
         for (i in satBalls.indices) {
+            val satBottom = mainBottom + dp(MAIN_BALL_DP + SAT_GAP_DP + i * SAT_STEP_DP)
+            val labelBottom = satBottom + dp((SAT_BALL_DP - LABEL_H_DP) / 2f)
             (satBalls[i].layoutParams as? LayoutParams)?.let {
-                if (it.bottomMargin != ballBottom) {
-                    it.bottomMargin = ballBottom
+                if (it.bottomMargin != satBottom) {
+                    it.bottomMargin = satBottom
                     satBalls[i].layoutParams = it
                 }
             }
@@ -287,15 +308,16 @@ class TransferPage(context: Context) : FrameLayout(context) {
         for (i in satViews.indices) {
             val ball = makeBall(SAT_BALL_DP.toInt(), Glass.fill(), 10f, satNames[i])
             val ballLp = LayoutParams(dp(SAT_BALL_DP), dp(SAT_BALL_DP), Gravity.BOTTOM or Gravity.RIGHT)
-            ballLp.rightMargin = dp(SAT_FIRST_RIGHT_DP + i * SAT_STEP_DP)
-            ballLp.bottomMargin = dp(BALL_BOTTOM_DP)
+            ballLp.rightMargin = dp(MAIN_RIGHT_DP)
+            ballLp.bottomMargin = dp(SAT_FIRST_BOTTOM_DP + i * SAT_STEP_DP)
             ball.visibility = View.INVISIBLE
             ball.alpha = 0f
-            ball.scaleX = 0.7f
-            ball.scaleY = 0.7f
+            ball.scaleX = 0.72f
+            ball.scaleY = 0.72f
+            ball.translationY = dp(20f).toFloat()
             ball.setOnClickListener {
                 switchView(satViews[i])
-                collapseBalls()
+                pulseSatellite(ball)
             }
             addView(ball, ballLp)
             satBalls.add(ball)
@@ -303,14 +325,15 @@ class TransferPage(context: Context) : FrameLayout(context) {
             val label = TextView(context).apply {
                 text = satNames[i]
                 textSize = 10f
-                gravity = Gravity.CENTER
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
                 setTextColor(Theme.palette.text2)
                 visibility = View.INVISIBLE
                 alpha = 0f
             }
-            val labelLp = LayoutParams(dp(SAT_BALL_DP), dp(LABEL_H_DP), Gravity.BOTTOM or Gravity.RIGHT)
-            labelLp.rightMargin = dp(SAT_FIRST_RIGHT_DP + i * SAT_STEP_DP)
-            labelLp.bottomMargin = dp(LABEL_BOTTOM_DP)
+            val labelLp = LayoutParams(dp(LABEL_WIDTH_DP), dp(LABEL_H_DP), Gravity.BOTTOM or Gravity.RIGHT)
+            labelLp.rightMargin = dp(LABEL_RIGHT_DP)
+            labelLp.bottomMargin = dp(SAT_FIRST_BOTTOM_DP + i * SAT_STEP_DP +
+                    (SAT_BALL_DP - LABEL_H_DP) / 2f)
             addView(label, labelLp)
             satLabels.add(label)
         }
@@ -400,6 +423,18 @@ class TransferPage(context: Context) : FrameLayout(context) {
         })
     }
 
+    private fun pulseSatellite(ball: FrameLayout) {
+        ball.scaleX = 0.9f
+        ball.scaleY = 0.9f
+        Motion.tween(120, Ease::softOut, { t ->
+            val v = 0.9f + 0.1f * t
+            ball.scaleX = v
+            ball.scaleY = v
+        }, {
+            collapseBalls()
+        })
+    }
+
     private fun expandBalls() {
         if (ballsExpanded) return
         ballAnim?.cancel()
@@ -410,18 +445,24 @@ class TransferPage(context: Context) : FrameLayout(context) {
         }
         val fromScale = FloatArray(satBalls.size) { satBalls[it].scaleX }
         val fromAlpha = FloatArray(satBalls.size) { satBalls[it].alpha }
-        ballAnim = Motion.tween(260, Ease::linear, { t ->
-            val elapsed = t * 260f
+        val fromY = FloatArray(satBalls.size) { satBalls[it].translationY }
+        ballAnim = Motion.tween(280, Ease::linear, { t ->
+            val elapsed = t * 280f
             for (i in satBalls.indices) {
-                val delay = i * 30f
-                val local = ((elapsed - delay) / (260f - delay)).coerceIn(0f, 1f)
+                val delay = i * 35f
+                val local = ((elapsed - delay) / (280f - delay)).coerceIn(0f, 1f)
                 val e = ballEase(local)
+                satBalls[i].translationY = fromY[i] * (1f - e)
                 satBalls[i].scaleX = fromScale[i] + (1f - fromScale[i]) * e
                 satBalls[i].scaleY = satBalls[i].scaleX
-                satBalls[i].alpha = fromAlpha[i] + (1f - fromAlpha[i]) * e
+                val a = (local / 0.4f).coerceIn(0f, 1f)
+                satBalls[i].alpha = fromAlpha[i] + (1f - fromAlpha[i]) * a
                 satLabels[i].alpha = satBalls[i].alpha
             }
         }, {
+            for (i in satBalls.indices) {
+                satBalls[i].translationY = 0f
+            }
             ballsExpanded = true
         })
     }
@@ -431,13 +472,17 @@ class TransferPage(context: Context) : FrameLayout(context) {
         ballAnim?.cancel()
         val fromScale = FloatArray(satBalls.size) { satBalls[it].scaleX }
         val fromAlpha = FloatArray(satBalls.size) { satBalls[it].alpha }
+        val fromY = FloatArray(satBalls.size) { satBalls[it].translationY }
+        val targetY = dp(20f).toFloat()
         ballAnim = Motion.tween(200, Ease::linear, { t ->
             val elapsed = t * 200f
             for (i in satBalls.indices) {
-                val delay = i * 30f
+                // 从上往下收：最上面的 i=3 先动。
+                val delay = (satBalls.size - 1 - i) * 25f
                 val local = ((elapsed - delay) / (200f - delay)).coerceIn(0f, 1f)
                 val e = ballEase(local)
-                satBalls[i].scaleX = fromScale[i] + (0.7f - fromScale[i]) * e
+                satBalls[i].translationY = fromY[i] + (targetY - fromY[i]) * e
+                satBalls[i].scaleX = fromScale[i] + (0.72f - fromScale[i]) * e
                 satBalls[i].scaleY = satBalls[i].scaleX
                 satBalls[i].alpha = fromAlpha[i] * (1f - e)
                 satLabels[i].alpha = satBalls[i].alpha
@@ -445,7 +490,12 @@ class TransferPage(context: Context) : FrameLayout(context) {
         }, {
             for (i in satBalls.indices) {
                 satBalls[i].visibility = View.INVISIBLE
+                satBalls[i].translationY = targetY
+                satBalls[i].alpha = 0f
+                satBalls[i].scaleX = 0.72f
+                satBalls[i].scaleY = 0.72f
                 satLabels[i].visibility = View.INVISIBLE
+                satLabels[i].alpha = 0f
             }
             scrim.visibility = View.GONE
             ballsExpanded = false
@@ -713,7 +763,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
             errorView.visibility = GONE
             web.visibility = View.VISIBLE
             val p = TransferService.port
-            status.text = "传文件中 · 端口 $p"
+            status.text = "传输 · " + Build.MODEL + " · 端口 $p"
             status.setTextColor(Theme.palette.ok)
             val url = "http://127.0.0.1:$p/?k=" + Uri.encode(TransferService.localToken)
             if (loadedUrl != url) {
@@ -734,7 +784,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
             maybeShowHint()
         } else {
             web.visibility = View.INVISIBLE
-            status.text = "未启动"
+            status.text = "传输 · " + Build.MODEL + " · 未启动"
             status.setTextColor(Theme.palette.muted)
             updatePanelActions()
         }
@@ -750,7 +800,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
     private fun fail(message: String) {
         starting = false
-        status.text = "未启动"
+        status.text = "传输 · " + Build.MODEL + " · 未启动"
         status.setTextColor(Theme.palette.muted)
         errorText.text = message
         errorView.visibility = VISIBLE

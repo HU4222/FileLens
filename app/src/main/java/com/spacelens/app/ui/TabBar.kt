@@ -24,6 +24,9 @@ class TabBar(context: Context) : View(context) {
 
     private var progress = 0f
     private var pressIndex = -1
+    private var pressScale = 1f
+    private var pressAlpha = 1f
+    private var pressAnim: Motion.Animation? = null
     private var downX = 0f
     private var downY = 0f
     private var moved = false
@@ -82,9 +85,13 @@ class TabBar(context: Context) : View(context) {
         Glass.draw(canvas, capsule, radius, dark, density = d)
 
         val iw = itemWidth()
-        val selectedIndex = progress.roundToInt().coerceIn(0, labels.size - 1)
-        val selectedText = Draw.text(context, 10f, p.text)
-        val blockW = max(44f * d, selectedText.measureText(labels[selectedIndex]) + 28f * d)
+        val measure = Draw.text(context, 10f, p.text)
+        val lo = progress.toInt().coerceIn(0, labels.size - 1)
+        val hi = (lo + 1).coerceAtMost(labels.size - 1)
+        val frac = (progress - lo).coerceIn(0f, 1f)
+        val widthLo = max(44f * d, measure.measureText(labels[lo]) + 28f * d)
+        val widthHi = max(44f * d, measure.measureText(labels[hi]) + 28f * d)
+        val blockW = widthLo + (widthHi - widthLo) * frac
         val blockCx = contentLeft() + progress * iw + iw / 2f
         val block = RectF(blockCx - blockW / 2f, capsule.centerY() - 22f * d,
                 blockCx + blockW / 2f, capsule.centerY() + 22f * d)
@@ -96,19 +103,51 @@ class TabBar(context: Context) : View(context) {
         for (i in labels.indices) {
             val cx = contentLeft() + iw * (i + 0.5f)
             val k = 1f - abs(progress - i).coerceIn(0f, 1f)
-            val base = if (pressIndex == i) p.text2 else p.muted
+            val pressed = pressIndex == i
+            val base = if (pressed) p.text2 else p.muted
             val color = Theme.blend(base, p.brand, k)
-            if (pressIndex == i && k < 0.5f) {
+            val alpha = if (pressed) (255 * pressAlpha).toInt() else 255
+            canvas.save()
+            if (pressed) canvas.scale(pressScale, pressScale, cx, capsule.centerY())
+            if (pressed && k < 0.5f) {
                 canvas.drawCircle(cx, capsule.centerY() - 7f * d, 17f * d,
                         Draw.fill(Theme.alpha(p.brandSoft, 150)))
             }
             Draw.icon(canvas, icons[i], cx, capsule.top + 22f * d,
-                    20f * d, color, 2f * d)
+                    20f * d, Theme.alpha(color, alpha), 2f * d)
             val tp = Draw.text(context, 10f, color, medium = k > 0.5f)
+            tp.alpha = alpha
             val label = labels[i]
             canvas.drawText(label, cx - tp.measureText(label) / 2f,
                     capsule.bottom - 10f * d, tp)
+            canvas.restore()
         }
+    }
+
+    private fun pressDown(index: Int) {
+        if (index < 0) return
+        pressAnim?.cancel()
+        pressIndex = index
+        pressScale = 0.96f
+        pressAlpha = 0.85f
+        invalidate()
+    }
+
+    private fun releasePress() {
+        if (pressIndex < 0) return
+        val fromScale = pressScale
+        val fromAlpha = pressAlpha
+        pressAnim?.cancel()
+        pressAnim = Motion.tween(130, Ease::softOut, { t ->
+            pressScale = fromScale + (1f - fromScale) * t
+            pressAlpha = fromAlpha + (1f - fromAlpha) * t
+            invalidate()
+        }, {
+            pressIndex = -1
+            pressScale = 1f
+            pressAlpha = 1f
+            invalidate()
+        })
     }
 
     private fun indexAt(x: Float): Int {
@@ -124,30 +163,27 @@ class TabBar(context: Context) : View(context) {
                 downX = event.x
                 downY = event.y
                 moved = false
-                pressIndex = indexAt(event.x)
-                invalidate()
+                pressDown(indexAt(event.x))
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                if (Math.abs(event.x - downX) > slop || Math.abs(event.y - downY) > slop) {
+                if (!moved && (Math.abs(event.x - downX) > slop ||
+                                Math.abs(event.y - downY) > slop)) {
                     moved = true
-                    pressIndex = -1
-                    invalidate()
+                    releasePress()
                 }
                 return true
             }
             MotionEvent.ACTION_UP -> {
                 val idx = indexAt(event.x)
-                pressIndex = -1
                 if (!moved && idx >= 0 && idx == indexAt(downX)) {
                     onSelect?.invoke(idx)
                 }
-                invalidate()
+                releasePress()
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
-                pressIndex = -1
-                invalidate()
+                releasePress()
                 return true
             }
         }
