@@ -49,14 +49,22 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
     companion object {
         const val REQ_FILE = 5010
+        private const val TABBAR_H_DP = 66f
+        private const val BALL_BOTTOM_SCREEN_DP = 82f
+        // TransferPage 的底边就是 TabBar 上沿，所以局部 bottomMargin = 82 - 66。
+        private const val BALL_BOTTOM_DP = BALL_BOTTOM_SCREEN_DP - TABBAR_H_DP
+        private const val LABEL_BOTTOM_DP = 0f
+        private const val LABEL_H_DP = 14f
         private const val MAIN_BALL_DP = 58f
+        private const val MAIN_RIGHT_DP = 16f
         private const val SAT_BALL_DP = 46f
-        private const val SAT_GAP_DP = 52f
-        private const val BALL_MARGIN_DP = 16f
-        private const val SAT_MARGIN_DP = 22f
+        private const val SAT_GAP_DP = 8f
+        private const val SAT_STEP_DP = SAT_BALL_DP + SAT_GAP_DP
+        private const val SAT_FIRST_RIGHT_DP = MAIN_RIGHT_DP + MAIN_BALL_DP + SAT_GAP_DP
     }
 
     private val status = TextView(context)
+    private val other = TextView(context)
     private val web = WebView(context)
     private val errorView = LinearLayout(context)
     private val errorText = TextView(context)
@@ -109,6 +117,17 @@ class TransferPage(context: Context) : FrameLayout(context) {
             setTextColor(Theme.palette.muted)
         }
         bar.addView(status, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        other.apply {
+            text = "其他设备"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.brand)
+            setPadding(dp(10f), dp(6f), dp(10f), dp(6f))
+            background = rounded(Theme.palette.brandSoft, Theme.palette.brandSoft, Radius.PILL)
+            setOnClickListener { showPanel() }
+        }
+        bar.addView(other, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         content.addView(bar, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dp(48f)))
@@ -232,8 +251,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
         for (i in satViews.indices) {
             val ball = makeBall(SAT_BALL_DP.toInt(), Glass.fill(), 10f, satNames[i])
             val ballLp = LayoutParams(dp(SAT_BALL_DP), dp(SAT_BALL_DP), Gravity.BOTTOM or Gravity.RIGHT)
-            ballLp.rightMargin = dp(SAT_MARGIN_DP)
-            ballLp.bottomMargin = dp(SAT_MARGIN_DP)
+            ballLp.rightMargin = dp(SAT_FIRST_RIGHT_DP + i * SAT_STEP_DP)
+            ballLp.bottomMargin = dp(BALL_BOTTOM_DP)
             ball.visibility = View.INVISIBLE
             ball.alpha = 0f
             ball.scaleX = 0.7f
@@ -253,9 +272,9 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 visibility = View.INVISIBLE
                 alpha = 0f
             }
-            val labelLp = LayoutParams(dp(MAIN_BALL_DP), dp(12f), Gravity.BOTTOM or Gravity.RIGHT)
-            labelLp.rightMargin = dp(BALL_MARGIN_DP)
-            labelLp.bottomMargin = 0
+            val labelLp = LayoutParams(dp(SAT_BALL_DP), dp(LABEL_H_DP), Gravity.BOTTOM or Gravity.RIGHT)
+            labelLp.rightMargin = dp(SAT_FIRST_RIGHT_DP + i * SAT_STEP_DP)
+            labelLp.bottomMargin = dp(LABEL_BOTTOM_DP)
             addView(label, labelLp)
             satLabels.add(label)
         }
@@ -275,8 +294,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         mainBall.setOnTouchListener { _, ev -> onMainBallTouch(ev) }
         val mainLp = LayoutParams(dp(MAIN_BALL_DP), dp(MAIN_BALL_DP), Gravity.BOTTOM or Gravity.RIGHT)
-        mainLp.rightMargin = dp(BALL_MARGIN_DP)
-        mainLp.bottomMargin = dp(BALL_MARGIN_DP)
+        mainLp.rightMargin = dp(MAIN_RIGHT_DP)
+        mainLp.bottomMargin = dp(BALL_BOTTOM_DP)
         addView(mainBall, mainLp)
     }
 
@@ -348,7 +367,6 @@ class TransferPage(context: Context) : FrameLayout(context) {
             satBalls[i].visibility = View.VISIBLE
             satLabels[i].visibility = View.VISIBLE
         }
-        val fromX = FloatArray(satBalls.size) { satBalls[it].translationX }
         val fromScale = FloatArray(satBalls.size) { satBalls[it].scaleX }
         val fromAlpha = FloatArray(satBalls.size) { satBalls[it].alpha }
         ballAnim = Motion.tween(260, Ease::linear, { t ->
@@ -357,12 +375,9 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 val delay = i * 30f
                 val local = ((elapsed - delay) / (260f - delay)).coerceIn(0f, 1f)
                 val e = ballEase(local)
-                val targetX = -dp(SAT_GAP_DP * (i + 1))
-                satBalls[i].translationX = fromX[i] + (targetX - fromX[i]) * e
                 satBalls[i].scaleX = fromScale[i] + (1f - fromScale[i]) * e
                 satBalls[i].scaleY = satBalls[i].scaleX
                 satBalls[i].alpha = fromAlpha[i] + (1f - fromAlpha[i]) * e
-                satLabels[i].translationX = satBalls[i].translationX
                 satLabels[i].alpha = satBalls[i].alpha
             }
         }, {
@@ -373,7 +388,6 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private fun collapseBalls() {
         if (!ballsExpanded) return
         ballAnim?.cancel()
-        val fromX = FloatArray(satBalls.size) { satBalls[it].translationX }
         val fromScale = FloatArray(satBalls.size) { satBalls[it].scaleX }
         val fromAlpha = FloatArray(satBalls.size) { satBalls[it].alpha }
         ballAnim = Motion.tween(200, Ease::linear, { t ->
@@ -382,11 +396,9 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 val delay = i * 30f
                 val local = ((elapsed - delay) / (200f - delay)).coerceIn(0f, 1f)
                 val e = ballEase(local)
-                satBalls[i].translationX = fromX[i] * (1f - e)
                 satBalls[i].scaleX = fromScale[i] + (0.7f - fromScale[i]) * e
                 satBalls[i].scaleY = satBalls[i].scaleX
                 satBalls[i].alpha = fromAlpha[i] * (1f - e)
-                satLabels[i].translationX = satBalls[i].translationX
                 satLabels[i].alpha = satBalls[i].alpha
             }
         }, {
