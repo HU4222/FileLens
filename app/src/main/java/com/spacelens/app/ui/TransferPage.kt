@@ -14,7 +14,9 @@ import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -313,11 +315,9 @@ class TransferPage(context: Context) : FrameLayout(context) {
             satLabels.add(label)
         }
 
-        mainBall.addView(View(context).apply {
-            background = Glass.background(
-                    Color.argb(66, 139, 135, 255), Glass.stroke(), dp(31f).toFloat())
-            Glass.applyBlur(this, 20f)
-        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        mainBall.addView(glassBackground(
+                Color.argb(66, 139, 135, 255), 31f),
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         mainBallLabel.apply {
             text = "浏览"
             textSize = 11f
@@ -335,17 +335,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
     private fun makeBall(size: Int, fill: Int, textSize: Float, text: String): FrameLayout {
         val root = FrameLayout(context)
-        val bg = View(context).apply {
-            background = Glass.background(fill, Glass.stroke(), dp(size / 2f).toFloat())
-            Glass.applyBlur(this, 20f)
-        }
-        root.addView(bg, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        root.addView(View(context).apply {
-            setBackgroundColor(Glass.highlight())
-        }, LayoutParams(LayoutParams.MATCH_PARENT, dp(1f), Gravity.TOP).apply {
-            leftMargin = dp(8f)
-            rightMargin = dp(8f)
-        })
+        root.addView(glassBackground(fill, size / 2f),
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         root.addView(TextView(context).apply {
             this.text = text
             this.textSize = textSize
@@ -355,6 +346,16 @@ class TransferPage(context: Context) : FrameLayout(context) {
         root.isClickable = true
         return root
     }
+
+    private fun glassBackground(fill: Int, radiusDp: Float): View =
+            object : View(context) {
+                override fun onDraw(canvas: Canvas) {
+                    Glass.draw(canvas,
+                            RectF(0f, 0f, width.toFloat(), height.toFloat()),
+                            dp(radiusDp).toFloat(), Theme.palette.dark, fill,
+                            resources.displayMetrics.density)
+                }
+            }
 
     private fun onMainBallTouch(ev: MotionEvent): Boolean {
         when (ev.actionMasked) {
@@ -539,8 +540,9 @@ class TransferPage(context: Context) : FrameLayout(context) {
         sheet.apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20f), dp(18f), dp(20f), dp(18f))
-            background = Glass.background(
-                    Glass.fill(), Glass.stroke(), dp(Glass.radius()).toFloat())
+            background = Glass.drawable(
+                    dp(Glass.radius()).toFloat(), Theme.palette.dark,
+                    resources.displayMetrics.density)
             setOnClickListener { }
         }
         val sheetLp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
@@ -549,10 +551,6 @@ class TransferPage(context: Context) : FrameLayout(context) {
         sheetLp.rightMargin = dp(12f)
         sheetLp.bottomMargin = dp(12f)
         panel.addView(sheet, sheetLp)
-        sheet.addView(View(context).apply {
-            setBackgroundColor(Glass.highlight())
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(0.5f)))
-
         sheet.addView(TextView(context).apply {
             text = "其他设备访问"
             textSize = 18f

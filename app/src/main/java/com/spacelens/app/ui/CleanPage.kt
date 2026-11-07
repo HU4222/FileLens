@@ -225,6 +225,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
         }
         val dlp = LayoutParams(LayoutParams.MATCH_PARENT, dp(42f))
         dlp.topMargin = dp(6f)
+        dlp.bottomMargin = dp(92f)
         dupSection.addView(delete, dlp)
         updateSummary()
         addView(dupSection, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
@@ -395,6 +396,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
         }
         val lp = LayoutParams(LayoutParams.MATCH_PARENT, dp(42f))
         lp.topMargin = dp(6f)
+        lp.bottomMargin = dp(92f)
         garbageSection.addView(garbageDelete, lp)
         addView(garbageSection, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
     }

@@ -78,16 +78,8 @@ class TabBar(context: Context) : View(context) {
                 height - Draw.dp(context, 18f),
         )
         val radius = 31f * d
-        val fill = if (dark) Color.argb(26, 255, 255, 255) else Color.argb(158, 255, 255, 255)
-        val stroke = if (dark) Color.argb(66, 255, 255, 255) else Color.argb(20, 15, 23, 42)
-        val highlight = if (dark) Color.argb(77, 255, 255, 255) else Color.argb(217, 255, 255, 255)
         Draw.softShadow(canvas, capsule, radius, d)
-        canvas.drawRoundRect(capsule, radius, radius, Draw.fill(fill))
-        canvas.drawRoundRect(capsule, radius, radius,
-                Draw.stroke(stroke, max(1f, 0.5f * d)))
-        canvas.drawLine(capsule.left + radius, capsule.top + 0.5f * d,
-                capsule.right - radius, capsule.top + 0.5f * d,
-                Draw.stroke(highlight, 1f))
+        Glass.draw(canvas, capsule, radius, dark, density = d)
 
         val iw = itemWidth()
         val selectedIndex = progress.roundToInt().coerceIn(0, labels.size - 1)
