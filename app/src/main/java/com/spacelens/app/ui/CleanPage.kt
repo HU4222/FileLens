@@ -202,7 +202,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
         if (groups.isEmpty()) {
             val empty = TextView(context).apply {
                 text = "没有发现重复文件"
-                textSize = 12f
+                textSize = 13f
                 setTextColor(Theme.palette.muted)
                 gravity = Gravity.CENTER
                 setPadding(0, dp(36f), 0, 0)
@@ -211,14 +211,23 @@ class CleanPage(context: Context) : LinearLayout(context) {
             return
         }
         for ((gi, group) in groups.withIndex()) {
+            val groupCard = LinearLayout(context).apply {
+                orientation = VERTICAL
+                setPadding(dp(8f), dp(6f), dp(8f), dp(8f))
+                background = rounded(Theme.palette.panelSoft, Theme.palette.line, Radius.PANEL)
+            }
+            val groupLp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            groupLp.bottomMargin = dp(10f)
+            body.addView(groupCard, groupLp)
+
             val header = TextView(context).apply {
                 text = "第 ${gi + 1} 组 · ${Fmt.bytes(group.size)} × ${group.files.size} 份 · 可释放 ${Fmt.bytes(group.reclaim)}"
                 textSize = 15f
                 typeface = Draw.SANS_MEDIUM
                 setTextColor(Theme.palette.text)
-                setPadding(dp(4f), dp(10f), dp(4f), dp(4f))
+                setPadding(dp(4f), dp(8f), dp(4f), dp(4f))
             }
-            body.addView(header, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+            groupCard.addView(header, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
             for ((fi, file) in group.files.withIndex()) {
                 val row = LinearLayout(context).apply {
                     orientation = VERTICAL
@@ -256,7 +265,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
                 })
                 val lp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 lp.bottomMargin = dp(4f)
-                body.addView(row, lp)
+                groupCard.addView(row, lp)
             }
         }
     }
