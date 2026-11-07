@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SpaceLens</string>
-    <string name="app_description">SpaceLens 空间透镜 · 实时存储树图与闪存测速 · HU4222</string>
+    <string name="app_name">文件管家</string>
+    <string name="app_description">文件管家 · 空间 / 搜索 / 清理 · HU4222</string>
 
-    <string name="tab_overview">总览</string>
+    <string name="tab_overview">空间</string>
     <string name="tab_tree">空间树</string>
     <string name="tab_bench">测速</string>
     <string name="tab_mine">我的</string>

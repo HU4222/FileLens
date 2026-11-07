@@ -15,8 +15,8 @@ import android.view.View
  */
 class NavRail(context: Context) : View(context) {
 
-    private val labels = arrayOf("总览", "空间树", "测速", "我的")
-    private val icons = arrayOf(Icon.OVERVIEW, Icon.TREE, Icon.GAUGE, Icon.USER)
+    private val labels = arrayOf("空间", "搜索", "清理", "传输")
+    private val icons = arrayOf(Icon.TREE, Icon.SEARCH, Icon.TRASH, Icon.SHIELD)
 
     var selected: Int = 0
         private set

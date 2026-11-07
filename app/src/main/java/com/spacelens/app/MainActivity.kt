@@ -21,6 +21,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import com.spacelens.app.core.Classifier
 import com.spacelens.app.core.DeletePolicy
@@ -41,6 +42,7 @@ import com.spacelens.app.bench.BenchEngine
 import com.spacelens.app.ui.BackdropView
 import com.spacelens.app.ui.BenchPage
 import com.spacelens.app.ui.Breakpoints
+import com.spacelens.app.ui.CleanPage
 import com.spacelens.app.ui.DetailPane
 import com.spacelens.app.ui.Dialogs
 import com.spacelens.app.ui.FpsHudView
@@ -50,12 +52,14 @@ import com.spacelens.app.ui.MinePage
 import com.spacelens.app.ui.NavRail
 import com.spacelens.app.ui.OverviewPage
 import com.spacelens.app.ui.ResponsiveShell
+import com.spacelens.app.ui.SearchPage
 import com.spacelens.app.ui.SplashView
 import com.spacelens.app.ui.SwipePager
 import com.spacelens.app.ui.TabBar
 import com.spacelens.app.ui.Theme
 import com.spacelens.app.ui.ThemeMode
 import com.spacelens.app.ui.TopBar
+import com.spacelens.app.ui.TransferPage
 import com.spacelens.app.ui.TreePage
 import com.spacelens.app.ui.WindowClass
 import java.io.File
@@ -83,6 +87,10 @@ class MainActivity : Activity() {
     private lateinit var treePage: TreePage
     private lateinit var benchPage: BenchPage
     private lateinit var minePage: MinePage
+    private lateinit var searchPage: SearchPage
+    private lateinit var cleanPage: CleanPage
+    private lateinit var transferPage: TransferPage
+    private lateinit var treeOverlay: FrameLayout
 
     private var pendingScan = false
     private var awaitingSettings = false
@@ -96,12 +104,12 @@ class MainActivity : Activity() {
     private val selection = SelectionState()
     private var detailNode = 0
 
-    private val titles = arrayOf("总览", "空间树", "测速", "我的")
+    private val titles = arrayOf("空间", "搜索", "清理", "传输")
     private val subtitles = arrayOf(
-            "空间透镜 · 实时存储透视",
-            "边扫边长 · 点方块钻入",
-            "六项测试 · 看清闪存档位",
-            "权限、主题与关于",
+            "存储总览 · 空间树",
+            "只搜内存索引 · 不重扫磁盘",
+            "重复文件 · 删除进回收站",
+            "局域网互传占位",
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -155,14 +163,17 @@ class MainActivity : Activity() {
         treePage = TreePage(this)
         benchPage = BenchPage(this)
         minePage = MinePage(this)
+        searchPage = SearchPage(this)
+        cleanPage = CleanPage(this)
+        transferPage = TransferPage(this)
 
         pager.addView(overviewPage, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        pager.addView(treePage, ViewGroup.LayoutParams(
+        pager.addView(searchPage, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        pager.addView(benchPage, ViewGroup.LayoutParams(
+        pager.addView(cleanPage, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        pager.addView(minePage, ViewGroup.LayoutParams(
+        pager.addView(transferPage, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         shell.bind(navRail, topBar, pager, tabBar, detailPane)
@@ -198,6 +209,38 @@ class MainActivity : Activity() {
         undoLp.bottomMargin = (88 * resources.displayMetrics.density).toInt()
         root.addView(undoBar, undoLp)
 
+        // 空间树保留为「空间」页内的全屏二级页，不占第 5 个 Tab。
+        treeOverlay = FrameLayout(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(Theme.palette.bg)
+        }
+        treeOverlay.addView(treePage, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        val backToSpace = TextView(this).apply {
+            text = "返回空间总览"
+            textSize = 11.5f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.brand)
+            setPadding((16 * resources.displayMetrics.density).toInt(),
+                    (9 * resources.displayMetrics.density).toInt(),
+                    (16 * resources.displayMetrics.density).toInt(),
+                    (9 * resources.displayMetrics.density).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 14 * resources.displayMetrics.density
+                setColor(Theme.palette.brandSoft)
+                setStroke((1 * resources.displayMetrics.density).toInt().coerceAtLeast(1),
+                        Theme.palette.brand)
+            }
+            setOnClickListener { hideTreeOverlay() }
+        }
+        val backLp = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT)
+        backLp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        backLp.bottomMargin = (22 * resources.displayMetrics.density).toInt()
+        treeOverlay.addView(backToSpace, backLp)
+        root.addView(treeOverlay, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
         topBar.onLongPress = { toggleFpsHud() }
         tabBar.onSelect = { selectTab(it, animate = true) }
         navRail.onSelect = { selectTab(it, animate = true) }
@@ -205,8 +248,16 @@ class MainActivity : Activity() {
         pager.onPageChanged = { onPageSettled(it) }
 
         overviewPage.onStartScan = { requestScan() }
-        overviewPage.onOpenTab = { selectTab(it, animate = true) }
-        overviewPage.onHealth = { showHealth() }
+        overviewPage.onOpenTab = { idx ->
+            when (idx) {
+                1 -> showTreeOverlay()
+                2 -> toast("测速暂未开放")
+            }
+        }
+        overviewPage.onHealth = {
+            selectTab(2, animate = true)
+            cleanPage.onShown()
+        }
         treePage.onStartScan = { requestScan() }
         treePage.onCancelScan = { cancelScan() }
         treePage.onNodeLongPress = { node -> onTreeNodeLongPress(node) }
@@ -223,7 +274,17 @@ class MainActivity : Activity() {
                 updateSelectionUi()
             }
         }
-        treePage.onSearch = { showSearch() }
+        treePage.onSearch = {
+            hideTreeOverlay()
+            selectTab(1, animate = true)
+            searchPage.onShown()
+        }
+        searchPage.store = store
+        searchPage.rootPath = rootPath()
+        searchPage.onOpenLocation = { node -> showTreeAt(node) }
+        searchPage.onDeleteRequested = { node -> deleteSingle(node) }
+        cleanPage.store = store
+        cleanPage.rootPath = rootPath()
         benchPage.onStart = { startBench() }
         minePage.onAction = { onMineAction(it) }
 
@@ -260,17 +321,20 @@ class MainActivity : Activity() {
 
     private fun selectTab(index: Int, animate: Boolean) {
         val i = index.coerceIn(0, titles.size - 1)
+        hideTreeOverlay()
         updateTopBar(i)
         shell.setTab(i)
         navRail.setSelected(i)
         val animateNow = animate && shell.windowClass != WindowClass.MEDIUM
         pager.setCurrent(i, animateNow)
         tabBar.setPage(i, animate)
-        if (i == 0) {
-            overviewPage.refreshStorage()
-            overviewPage.onShown()
-        } else if (i == 3) {
-            updateMine()
+        when (i) {
+            0 -> {
+                overviewPage.refreshStorage()
+                overviewPage.onShown()
+            }
+            1 -> searchPage.onShown()
+            2 -> cleanPage.onShown()
         }
         updateDetail()
     }
@@ -280,13 +344,68 @@ class MainActivity : Activity() {
         shell.setTab(index)
         navRail.setSelected(index)
         tabBar.finishSwipe(index)
-        if (index == 0) {
-            overviewPage.refreshStorage()
-            overviewPage.onShown()
-        } else if (index == 3) {
-            updateMine()
+        when (index) {
+            0 -> {
+                overviewPage.refreshStorage()
+                overviewPage.onShown()
+            }
+            1 -> searchPage.onShown()
+            2 -> cleanPage.onShown()
         }
         updateDetail()
+    }
+
+    private fun isTreeVisible(): Boolean =
+            ::treeOverlay.isInitialized && treeOverlay.visibility == View.VISIBLE
+
+    private fun showTreeOverlay() {
+        if (!::treeOverlay.isInitialized) return
+        treePage.setWindowClass()
+        treeOverlay.visibility = View.VISIBLE
+        treeOverlay.bringToFront()
+        updateDetail()
+    }
+
+    private fun hideTreeOverlay() {
+        if (::treeOverlay.isInitialized) treeOverlay.visibility = View.GONE
+    }
+
+    private fun showTreeAt(node: Int) {
+        val target = if (node in 0 until store.count
+                && store.flagsOf(node) and NodeStore.DIR != 0) node else store.parentOf(node)
+        if (target >= 0) treePage.showRoot(target)
+        showTreeOverlay()
+    }
+
+    private fun deleteSingle(node: Int) {
+        if (node <= 0 || node >= store.count) return
+        val d = DeletePolicy.decide(this, store, node, rootPath())
+        if (!d.selectable) {
+            toast(d.reason)
+            return
+        }
+        val abs = store.absolutePathOf(rootPath(), node)
+        val rel = store.relativePathOf(node)
+        if (rel.isEmpty()) return
+        Dialogs.showDeleteConfirm(this, "删除文件",
+                "将把「${store.nameOf(node)}」移入回收站，可恢复。") {
+            Thread({
+                val result = Trash.move(this, listOf(File(abs) to rel))
+                runOnUiThread {
+                    if (result.moved > 0) {
+                        store.markDeleted(intArrayOf(node))
+                        treePage.refreshTree()
+                        searchPage.refresh()
+                        cleanPage.reset()
+                        updateOverview()
+                        updateDetail()
+                        toast("已移入回收站")
+                    } else {
+                        toast("移动失败，文件未删除")
+                    }
+                }
+            }, "FileLens-DeleteOne").start()
+        }
     }
 
     private fun updateTopBar(index: Int) {
@@ -440,7 +559,8 @@ class MainActivity : Activity() {
         treePage.setForbidden(emptyMap())
         overviewPage.setScanning(true)
         updateOverview()
-        selectTab(1, animate = true)
+        selectTab(0, animate = true)
+        showTreeOverlay()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val s = Scanner(store, root, prefs.rateMode, object : Scanner.Listener {
@@ -469,6 +589,9 @@ class MainActivity : Activity() {
                         "denied=${summary.denied} rate=${summary.rateMode}")
                 updateOverview()
                 updateMine()
+                searchPage.rootPath = rootPath()
+                cleanPage.rootPath = rootPath()
+                cleanPage.reset()
                 updateDetail()
                 toast(
                         if (summary.partial) "已停止扫描：${com.spacelens.app.core.Fmt.count(summary.files.toLong())} 个文件，结果已保留"
@@ -523,6 +646,9 @@ class MainActivity : Activity() {
                     refreshForbidden()
                     updateOverview()
                     updateMine()
+                    searchPage.rootPath = rootPath()
+                    cleanPage.rootPath = rootPath()
+                    cleanPage.reset()
                     updateDetail()
                 } else {
                     treePage.setEmpty("内部存储")
@@ -610,7 +736,7 @@ class MainActivity : Activity() {
     private fun updateDetail() {
         if (!::shell.isInitialized || !::detailPane.isInitialized) return
         if (shell.windowClass == WindowClass.COMPACT) return
-        if (pager.currentPage == 1 && store.count > 1 && detailNode in 0 until store.count) {
+        if (isTreeVisible() && store.count > 1 && detailNode in 0 until store.count) {
             detailPane.showNode(store, detailNode, rootPath())
         } else {
             detailPane.showStorage(store, prefs.lastSummary, BuildConfig.VERSION_NAME)
@@ -876,7 +1002,9 @@ class MainActivity : Activity() {
             toast("先扫描后再搜索")
             return
         }
-        Dialogs.showSearch(this) { query -> doSearch(query) }
+        hideTreeOverlay()
+        selectTab(1, animate = true)
+        searchPage.onShown()
     }
 
     private fun doSearch(query: String) {
@@ -911,21 +1039,11 @@ class MainActivity : Activity() {
     }
     private fun showHealth() {
         if (store.count <= 1) {
-            toast("先扫描后再体检")
+            toast("先扫描后再清理")
             return
         }
-        toast("正在体检…")
-        Thread({
-            val findings = Health.scan(this, store, rootPath())
-            val text = buildString {
-                for (f in findings) {
-                    append("• ").append(f.title).append("：").append(f.summary).append("\n")
-                }
-            }
-            runOnUiThread {
-                Dialogs.showMessage(this, "存储体检", text.trim(), positive = "关闭", onPositive = {})
-            }
-        }, "SpaceLens-Health").start()
+        selectTab(2, animate = true)
+        cleanPage.onShown()
     }
 
     private fun exportAll() {        if (store.count <= 1) {
@@ -983,13 +1101,13 @@ class MainActivity : Activity() {
                 event.keyCode == KeyEvent.KEYCODE_ESCAPE -> {
                     if (selection.active) {
                         cancelSelection()
-                    } else if (pager.currentPage == 1 && treePage.goUp()) {
+                    } else if (isTreeVisible() && treePage.goUp()) {
                         updateDetail()
                     }
                     return true
                 }
                 event.keyCode == KeyEvent.KEYCODE_A && event.isCtrlPressed -> {
-                    if (pager.currentPage == 1 && store.count > 1) {
+                    if (isTreeVisible() && store.count > 1) {
                         selection.selectAllSiblings(store, treePage.rootIndex)
                         updateSelectionUi()
                     }
@@ -1000,7 +1118,7 @@ class MainActivity : Activity() {
                     return true
                 }
                 event.keyCode == KeyEvent.KEYCODE_DEL -> {
-                    if (pager.currentPage == 1 && treePage.goUp()) updateDetail()
+                    if (isTreeVisible() && treePage.goUp()) updateDetail()
                     return true
                 }
             }
@@ -1204,8 +1322,13 @@ class MainActivity : Activity() {
             cancelSelection()
             return
         }
-        if (pager.currentPage == 1 && treePage.goUp()) {
-            updateDetail()
+        if (isTreeVisible()) {
+            if (treePage.goUp()) {
+                updateDetail()
+            } else {
+                hideTreeOverlay()
+                updateDetail()
+            }
             return
         }
         if (pager.currentPage != 0) {
