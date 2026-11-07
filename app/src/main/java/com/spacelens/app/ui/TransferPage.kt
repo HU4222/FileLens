@@ -50,8 +50,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
     companion object {
         const val REQ_FILE = 5010
         private const val TABBAR_H_DP = 66f
-        private const val BALL_BOTTOM_SCREEN_DP = 82f
-        // TransferPage 的底边就是 TabBar 上沿，所以局部 bottomMargin = 82 - 66。
+        private const val BALL_BOTTOM_SCREEN_DP = 88f
+        // TransferPage 的底边就是 TabBar 上沿，所以局部 bottomMargin = 88 - 66。
         private const val BALL_BOTTOM_DP = BALL_BOTTOM_SCREEN_DP - TABBAR_H_DP
         private const val LABEL_BOTTOM_DP = 0f
         private const val LABEL_H_DP = 14f
@@ -140,9 +140,11 @@ class TransferPage(context: Context) : FrameLayout(context) {
             settings.cacheMode = WebSettings.LOAD_NO_CACHE
             settings.allowFileAccess = false
             settings.allowContentAccess = false
+            setPadding(0, 0, 0, dp(8f))
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    injectEmbedCss(view)
                     injectViewBridge(view)
                 }
             }
@@ -429,6 +431,18 @@ class TransferPage(context: Context) : FrameLayout(context) {
         web.evaluateJavascript(
                 "document.querySelector('[data-view=\"$view\"]')?.click()", null)
         handler.postDelayed({ readCurrentView() }, 200L)
+    }
+
+    private fun injectEmbedCss(view: WebView?) {
+        val js = """
+            (function(){
+              if(document.getElementById('dl-embed-style'))return;
+              var s=document.createElement('style');s.id='dl-embed-style';
+              s.textContent='.nav-foot{display:none!important}.brand{display:none!important}';
+              document.head.appendChild(s);
+            })();
+        """.trimIndent()
+        view?.evaluateJavascript(js, null)
     }
 
     private fun injectViewBridge(view: WebView?) {

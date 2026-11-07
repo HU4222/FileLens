@@ -7,7 +7,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
-import android.graphics.SweepGradient
 import android.os.Environment
 import android.os.StatFs
 import android.view.MotionEvent
@@ -37,9 +36,6 @@ class OverviewPage(context: Context) : FrameLayout(context) {
     private var categoryBytes = LongArray(7)
     private var scannedBytes = 0L
     private var summary: ScanSummary? = null
-    private var ringAnim = 0f
-    private var ringSweep = 0f
-    private var anim: Motion.Animation? = null
     private var valueAnim: Motion.Animation? = null
     private var animatedUsed = 0L
     private var shown = false
@@ -66,8 +62,6 @@ class OverviewPage(context: Context) : FrameLayout(context) {
             freeBytes = 0L
         }
         if (shown) {
-            anim?.cancel()
-            ringSweep = if (totalBytes > 0) (totalBytes - freeBytes).toFloat() / totalBytes else 0f
             animateNumber((totalBytes - freeBytes).coerceAtLeast(0L))
         }
         content.requestLayout()
@@ -89,10 +83,8 @@ class OverviewPage(context: Context) : FrameLayout(context) {
         content.invalidate()
         if (!shown) {
             shown = true
-            animateRing()
+            animateNumber((totalBytes - freeBytes).coerceAtLeast(0L))
         } else {
-            anim?.cancel()
-            ringSweep = if (totalBytes > 0) (totalBytes - freeBytes).toFloat() / totalBytes else 0f
             animateNumber((totalBytes - freeBytes).coerceAtLeast(0L))
         }
     }
@@ -126,20 +118,8 @@ class OverviewPage(context: Context) : FrameLayout(context) {
     fun onShown() {
         if (!shown) {
             shown = true
-            animateRing()
+            animateNumber((totalBytes - freeBytes).coerceAtLeast(0L))
         }
-    }
-
-    private fun animateRing() {
-        anim?.cancel()
-        val target = if (totalBytes > 0) (totalBytes - freeBytes).toFloat() / totalBytes else 0f
-        anim = Motion.tween(MotionDurations.PAGE, Ease::softOut, { t ->
-            ringAnim = t
-            ringSweep = target * t
-            content.invalidate()
-        })
-        animatedUsed = 0L
-        animateNumber((totalBytes - freeBytes).coerceAtLeast(0L))
     }
 
     private fun animateNumber(target: Long) {
@@ -156,7 +136,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
 
         private val d = resources.displayMetrics.density
         private val margin = Breakpoints.metrics(context).marginDp * d
-        private val heroH = 400f * d
+        private val heroH = 262f * d
         private val scanH = 42f * d
         private val catH = 484f * d
         private val quickH = 66f * d
@@ -231,37 +211,22 @@ class OverviewPage(context: Context) : FrameLayout(context) {
             val used = (totalBytes - freeBytes).coerceAtLeast(0L)
             val free = freeBytes.coerceAtLeast(0L)
             val cx = r.centerX()
-            val cy = r.top + 150f * d
-            val radius = 110f * d
-            val ringRect = RectF(cx - radius, cy - radius, cx + radius, cy + radius)
-
-            val track = Draw.stroke(p.panelSoft, 10f * d)
-            canvas.drawArc(ringRect, 0f, 360f, false, track)
-            if (ringSweep > 0.0001f) {
-                val ring = Draw.stroke(p.brand, 10f * d)
-                ring.shader = SweepGradient(cx, cy, intArrayOf(p.brand, p.brand2, p.brand),
-                        floatArrayOf(0f, 0.62f, 1f))
-                canvas.save()
-                canvas.rotate(-90f, cx, cy)
-                canvas.drawArc(ringRect, 0f, 360f * ringSweep, false, ring)
-                canvas.restore()
-            }
 
             val (valueText, unitText) = Fmt.splitBytes(animatedUsed)
-            val vp = Draw.text(context, 34f, p.text, medium = true, align = Paint.Align.LEFT)
+            val vp = Draw.text(context, 36f, p.text, medium = true, align = Paint.Align.LEFT)
             val up = Draw.text(context, 14f, p.text2, medium = true, align = Paint.Align.LEFT)
             val gap = 5f * d
             val totalW = vp.measureText(valueText) + gap + up.measureText(unitText)
             val startX = cx - totalW / 2f
-            val baseline = cy + 8f * d
+            val baseline = r.top + 112f * d
             canvas.drawText(valueText, startX, baseline, vp)
             canvas.drawText(unitText, startX + vp.measureText(valueText) + gap,
                     baseline - 10f * d, up)
-            val cap = Draw.text(context, 11f, p.muted, align = Paint.Align.CENTER)
-            canvas.drawText("已用", cx, cy + 34f * d, cap)
+            val cap = Draw.text(context, 12f, p.muted, align = Paint.Align.CENTER)
+            canvas.drawText("已用", cx, r.top + 140f * d, cap)
 
-            // 环下两枚胶囊
-            val pillTop = cy + radius + 20f * d
+            // 数字下两枚胶囊
+            val pillTop = r.top + 158f * d
             val pillH = 32f * d
             val pillGap = 10f * d
             val pillW = (r.width() - 40f * d - pillGap) / 2f
