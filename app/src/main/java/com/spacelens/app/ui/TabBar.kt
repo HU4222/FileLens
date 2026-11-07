@@ -82,6 +82,7 @@ class TabBar(context: Context) : View(context) {
         )
         val radius = 31f * d
         Draw.softShadow(canvas, capsule, radius, d)
+        canvas.drawRoundRect(capsule, radius, radius, Draw.fill(Color.argb(31, 0, 0, 0)))
         Glass.draw(canvas, capsule, radius, dark, density = d)
 
         val iw = itemWidth()

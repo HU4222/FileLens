@@ -55,8 +55,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
         private const val BALL_BOTTOM_SCREEN_DP = 116f
         // 1.2.0 起 pager 延伸到屏幕底，胶囊悬浮在上面；球位置直接用屏幕坐标。
         private const val BALL_BOTTOM_DP = BALL_BOTTOM_SCREEN_DP
-        private const val LABEL_H_DP = 14f
-        private const val LABEL_WIDTH_DP = 60f
+        private const val LABEL_H_DP = 22f
+        private const val LABEL_WIDTH_DP = 64f
         private const val MAIN_BALL_DP = 62f
         private const val MAIN_RIGHT_DP = 16f
         private const val SAT_BALL_DP = 54f
@@ -107,6 +107,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private val prefs = context.getSharedPreferences("filelens_transfer", Context.MODE_PRIVATE)
 
     init {
+        clipChildren = false
         setBackgroundColor(Theme.palette.bg)
 
         val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -307,7 +308,9 @@ class TransferPage(context: Context) : FrameLayout(context) {
         addView(scrim, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
         for (i in satViews.indices) {
-            val ball = makeBall(SAT_BALL_DP.toInt(), Glass.fill(), 10f, satNames[i], satIcons[i])
+            val satFill = if (Theme.palette.dark) Color.argb(77, 255, 255, 255)
+            else Color.argb(115, 255, 255, 255)
+            val ball = makeBall(SAT_BALL_DP.toInt(), satFill, 10f, satNames[i], satIcons[i])
             val ballLp = LayoutParams(dp(SAT_BALL_DP), dp(SAT_BALL_DP), Gravity.BOTTOM or Gravity.RIGHT)
             ballLp.rightMargin = dp(MAIN_RIGHT_DP)
             ballLp.bottomMargin = dp(SAT_FIRST_BOTTOM_DP + i * SAT_STEP_DP)
@@ -327,7 +330,10 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 text = satNames[i]
                 textSize = 10f
                 gravity = Gravity.END or Gravity.CENTER_VERTICAL
-                setTextColor(Theme.palette.text2)
+                setTextColor(Color.WHITE)
+                setPadding(dp(8f), dp(4f), dp(8f), dp(4f))
+                background = rounded(Color.argb(89, 0, 0, 0),
+                        Color.TRANSPARENT, 8f)
                 visibility = View.INVISIBLE
                 alpha = 0f
             }
@@ -340,7 +346,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
         }
 
         mainBall.addView(glassBackground(
-                Color.argb(66, 139, 135, 255), 31f),
+                Color.argb(107, 139, 135, 255), 31f),
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         mainBallLabel.apply {
             text = "浏览"
@@ -355,6 +361,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
         mainLp.rightMargin = dp(MAIN_RIGHT_DP)
         mainLp.bottomMargin = dp(BALL_BOTTOM_DP)
         addView(mainBall, mainLp)
+        android.util.Log.i("FileLensBall", "satellites=${satBalls.size}")
     }
 
     private fun makeBall(

@@ -36,6 +36,8 @@ class SwipePager(context: Context) : ViewGroup(context) {
     init {
         isChildrenDrawingOrderEnabled = false
         overScrollMode = OVER_SCROLL_NEVER
+        // 悬浮球在页面顶部方向有少量外溢，不要裁掉第 4 颗。
+        clipChildren = false
     }
 
     fun setCurrent(index: Int, animate: Boolean) {

@@ -33,7 +33,7 @@ object Glass {
     fun radius(): Float = RADIUS_DP
 
     fun fill(dark: Boolean = Theme.palette.dark): Int =
-            if (dark) Color.argb(36, 255, 255, 255) else Color.argb(158, 255, 255, 255)
+            if (dark) Color.argb(66, 255, 255, 255) else Color.argb(209, 255, 255, 255)
 
     fun stroke(dark: Boolean = Theme.palette.dark): Int =
             if (dark) Color.argb(71, 255, 255, 255) else Color.argb(20, 15, 23, 42)
