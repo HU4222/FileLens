@@ -11,6 +11,7 @@ import android.text.InputType
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.view.ViewGroup
 import android.widget.AbsListView
 import android.widget.BaseAdapter
@@ -127,6 +128,10 @@ class SearchPage(context: Context) : LinearLayout(context) {
         } else {
             schedule(query.text?.toString()?.trim().orEmpty())
         }
+        // 不自动聚焦：用户点输入框才弹键盘，避免切页时键盘重排造成闪动。
+        query.clearFocus()
+        (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                ?.hideSoftInputFromWindow(query.windowToken, 0)
     }
 
     fun refresh() {

@@ -40,10 +40,12 @@ class SwipePager(context: Context) : ViewGroup(context) {
         val target = index.coerceIn(0, childCount - 1)
         val to = target * width
         anim?.cancel()
+        showAllPages()
         if (!animate || width == 0) {
             scrollX = to
             currentPage = target
             updatePageTransforms()
+            applySettledVisibility()
             onPageChanged?.invoke(target)
             onProgress?.invoke(target.toFloat())
             return
@@ -54,6 +56,8 @@ class SwipePager(context: Context) : ViewGroup(context) {
             updatePageTransforms()
         }, {
             currentPage = target
+            updatePageTransforms()
+            applySettledVisibility()
             onPageChanged?.invoke(target)
         })
     }
@@ -81,6 +85,9 @@ class SwipePager(context: Context) : ViewGroup(context) {
             scrollX = currentPage * w
         }
         updatePageTransforms()
+        if (anim == null && !dragging && scrollX == currentPage * w) {
+            applySettledVisibility()
+        }
     }
 
     private fun horizontalDrag(dx: Float, dy: Float): Boolean =
@@ -94,6 +101,7 @@ class SwipePager(context: Context) : ViewGroup(context) {
                 downScroll = scrollX
                 dragging = false
                 anim?.cancel()
+                showAllPages()
             }
             MotionEvent.ACTION_MOVE -> {
                 if (horizontalDrag(ev.x - downX, ev.y - downY)) {
@@ -116,6 +124,7 @@ class SwipePager(context: Context) : ViewGroup(context) {
                 downY = ev.y
                 downScroll = scrollX
                 anim?.cancel()
+                showAllPages()
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -155,13 +164,27 @@ class SwipePager(context: Context) : ViewGroup(context) {
         val from = scrollX.toFloat()
         val to = (page * width).toFloat()
         anim?.cancel()
+        showAllPages()
         anim = Motion.tween(MotionDurations.PAGE, Ease::softOut, { t ->
             scrollX = (from + (to - from) * t).roundToInt()
             updatePageTransforms()
         }, {
             currentPage = page
+            updatePageTransforms()
+            applySettledVisibility()
             onPageChanged?.invoke(page)
         })
+    }
+
+    /** 动画/拖动期间所有页可见；停稳后只让当前页参与绘制，避免旧页继续 invalidate 造成残影。 */
+    private fun showAllPages() {
+        for (i in 0 until childCount) getChildAt(i).visibility = VISIBLE
+    }
+
+    private fun applySettledVisibility() {
+        for (i in 0 until childCount) {
+            getChildAt(i).visibility = if (i == currentPage) VISIBLE else INVISIBLE
+        }
     }
 
     /** 页面切换：只做 6dp 上移 + 淡入，不缩放、不做 3D。 */
