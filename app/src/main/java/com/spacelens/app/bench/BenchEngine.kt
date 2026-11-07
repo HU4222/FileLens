@@ -1,17 +1,21 @@
 package com.spacelens.app.bench
 
 import android.content.Context
-import android.system.Os
+import android.os.StatFs
+import android.os.SystemClock
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
+import java.util.concurrent.CancellationException
 import kotlin.math.max
 import kotlin.math.min
 
 /**
- * M4 六项测速（串行）：顺序写 / 顺序读 / 4K 随机读 / 4K 随机写 / 元数据 / fsync。
- * 只写 `context.cacheDir/bench/`，结束清理；不碰用户存储目录。
+ * 顺序读写测速：按时间跑满，前一半写、后一半读。
+ * 只写 `context.cacheDir/bench/`；取消/异常也会清空。
+ *
+ * 原来的 4K 随机读写 / 8 线程 QD32 / 元数据 / fsync 代码已不参与本流程；
+ * 5/10 秒成品只测顺序写、顺序读。
  */
 object BenchEngine {
 
@@ -32,7 +36,13 @@ object BenchEngine {
             val elapsedMs: Long,
     )
 
-    data class Progress(val index: Int, val label: String, val fraction: Float)
+    data class Progress(
+            val phase: String,
+            val instantMBps: Double,
+            val elapsedMs: Long,
+            val totalMs: Long,
+            val fraction: Float,
+    )
 
     interface Listener {
         fun onProgress(p: Progress)
@@ -44,25 +54,22 @@ object BenchEngine {
     @Volatile private var thread: Thread? = null
 
     private const val MB = 1024 * 1024
-    private const val FILE_MB = 128
-    private const val RANDOM_OPS = 2000
-    private const val META_FILES = 300
-    private const val FSYNC_OPS = 32
+    private const val MAX_WRITE_BYTES = 4L * 1024 * 1024 * 1024
 
-    fun run(context: Context, listener: Listener) {
+    fun run(context: Context, durationMs: Long, listener: Listener) {
         if (thread?.isAlive == true) return
         cancelled = false
+        val totalMs = durationMs.coerceIn(5000L, 10000L)
         thread = Thread({
             val dir = File(context.cacheDir, "bench")
             try {
                 dir.mkdirs()
                 clear(dir)
-                val free = dir.usableSpace
-                val sizeMb = if (free < 1536L * MB) 64 else FILE_MB
-                val r = runInternal(dir, sizeMb, listener)
-                listener.onFinished(r)
+                listener.onFinished(runTimed(dir, totalMs, listener))
+            } catch (_: CancellationException) {
+                // 用户取消：UI 已由 onCancel 收口，不再发“失败”提示。
             } catch (t: Throwable) {
-                listener.onError(t.message ?: "测速失败")
+                if (!cancelled) listener.onError(t.message ?: "测速失败")
             } finally {
                 try {
                     clear(dir)
@@ -77,171 +84,162 @@ object BenchEngine {
         thread?.interrupt()
     }
 
-    private fun runInternal(dir: File, sizeMb: Int, l: Listener): Result {
-        val total = 6
-        val t0 = System.nanoTime()
-        var writeBytes = 0L
+    private fun runTimed(dir: File, totalMs: Long, l: Listener): Result {
+        val available = try {
+            StatFs(dir.absolutePath).availableBytes
+        } catch (_: Throwable) {
+            0L
+        }
+        if (available < 4L * MB) throw IllegalStateException("可用空间不足，无法测速")
+        // 单次最多使用可用空间的 30%，且不超过 4GB，避免为了跑满时长写爆存储。
+        val writeCap = min((available * 0.3).toLong(), MAX_WRITE_BYTES)
+        val writeMs = totalMs / 2
+        val readMs = totalMs - writeMs
+        val allStart = SystemClock.elapsedRealtime()
+
         val file = File(dir, "seq.bin")
         val raf = RandomAccessFile(file, "rw")
+        try {
         val ch = raf.channel
         val buf = ByteBuffer.allocateDirect(MB)
         val chunk = ByteArray(MB)
         for (i in 0 until MB) chunk[i] = (i and 0xFF).toByte()
-        buf.put(chunk)
-        buf.flip()
+        var written = 0L
+        var spaceLimited = false
 
-        // 1 顺序写
-        l.onProgress(Progress(0, "顺序写", 0f))
-        val wStart = System.nanoTime()
-        var written = 0
-        while (written < sizeMb * MB && !cancelled) {
-            buf.clear()
-            ch.write(buf)
-            written += MB
-            if (written % (8 * MB) == 0) ch.force(false)
-            l.onProgress(Progress(0, "顺序写", written.toFloat() / (sizeMb * MB)))
-        }
-        ch.force(false)
-        val seqWrite = mbPerSec(written.toLong(), System.nanoTime() - wStart)
-        writeBytes += written.toLong()
-
-        // 2 顺序读（posix_fadvise 清页缓存）
-        l.onProgress(Progress(1, "顺序读", 0f))
-        var cacheNote = ""
-        var cleared = true
-        try {
-            val m = Os::class.java.getMethod("posix_fadvise", java.io.FileDescriptor::class.java,
-                    Long::class.javaPrimitiveType, Long::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-            m.invoke(null, raf.fd, 0L, 0L, 4)
-        } catch (t: Throwable) {
-            cleared = false
-            cacheNote = "含页缓存（DONTNEED 不可用，取第二遍）"
-        }
-        var read = 0L
-        var rStart = System.nanoTime()
-        fun readOnce() {
-            read = 0L
-            ch.position(0)
-            while (read < written && !cancelled) {
-                buf.clear()
-                val n = ch.read(buf)
-                if (n <= 0) break
-                read += n
-                l.onProgress(Progress(1, "顺序读", read.toFloat() / written))
+        // 写入阶段
+        l.onProgress(Progress("正在写入…", 0.0, 0L, totalMs, 0f))
+        val writeStart = SystemClock.elapsedRealtime()
+        val writeWindow = SpeedWindow(writeStart)
+        var writeReportAt = writeStart
+        while (!cancelled) {
+            val now = SystemClock.elapsedRealtime()
+            if (now - writeStart >= writeMs) break
+            if (written + MB > writeCap) {
+                spaceLimited = true
+                break
             }
-        }
-        readOnce()
-        if (!cleared && !cancelled) {
-            rStart = System.nanoTime()
-            readOnce()
-        }
-        val seqRead = mbPerSec(read, System.nanoTime() - rStart)
-
-        // 3 4K 随机读 QD1
-        l.onProgress(Progress(2, "4K 随机读", 0f))
-        val rndRead = ByteBuffer.allocateDirect(4096)
-        var rr = 0
-        val rrStart = System.nanoTime()
-        for (i in 0 until RANDOM_OPS) {
-            if (cancelled) break
-            val pos = (Math.random() * max(1, written - 4096)).toLong()
-            rndRead.clear()
-            ch.read(rndRead, pos)
-            rr++
-            if (i % 100 == 0) l.onProgress(Progress(2, "4K 随机读", i.toFloat() / RANDOM_OPS))
-        }
-        val rrSec = max((System.nanoTime() - rrStart) / 1e9, 0.0001)
-        val randReadIops = rr / rrSec
-        val randReadMb = rr * 4096.0 / MB / rrSec
-
-        // 3b 4K 随机读 QD32（8 线程 × 250 次）
-        l.onProgress(Progress(2, "4K 随机读 QD32", 0f))
-        val qdStart = System.nanoTime()
-        val qdCount = java.util.concurrent.atomic.AtomicInteger(0)
-        val pool = java.util.concurrent.Executors.newFixedThreadPool(8)
-        for (t in 0 until 8) {
-            pool.execute {
-                val b = ByteBuffer.allocateDirect(4096)
-                for (k in 0 until 250) {
-                    if (cancelled) break
-                    val pos = (Math.random() * max(1, written - 4096)).toLong()
-                    b.clear()
-                    try { ch.read(b, pos) } catch (_: Throwable) {}
-                    qdCount.incrementAndGet()
+            buf.clear()
+            var ok = true
+            while (buf.hasRemaining()) {
+                if (ch.write(buf) < 0) {
+                    ok = false
+                    break
                 }
             }
+            if (!ok) break
+            written += MB
+            writeWindow.add(now, written)
+            if (now - writeReportAt >= 200L) {
+                writeReportAt = now
+                report(l, "正在写入…", writeWindow.instant(now), allStart, totalMs, now)
+            }
         }
-        pool.shutdown()
-        pool.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)
-        val qdSec = max((System.nanoTime() - qdStart) / 1e9, 0.0001)
-        val qd32 = qdCount.get() / qdSec
-
-        // 4 4K 随机写 QD1
-        l.onProgress(Progress(3, "4K 随机写", 0f))
-        val rndWrite = ByteBuffer.allocateDirect(4096)
-        var rw = 0
-        val rwStart = System.nanoTime()
-        for (i in 0 until RANDOM_OPS) {
-            if (cancelled) break
-            val pos = (Math.random() * max(1, written - 4096)).toLong()
-            rndWrite.clear()
-            rndWrite.putInt(i)
-            rndWrite.flip()
-            ch.write(rndWrite, pos)
-            rw++
-            writeBytes += 4096
-            if (i % 200 == 0) ch.force(false)
-            if (i % 100 == 0) l.onProgress(Progress(3, "4K 随机写", i.toFloat() / RANDOM_OPS))
+        if (!cancelled) {
+            try {
+                ch.force(false)
+            } catch (_: Throwable) {
+            }
         }
-        ch.force(false)
-        val rwSec = max((System.nanoTime() - rwStart) / 1e9, 0.0001)
-        val randWriteIops = rw / rwSec
-
-        // 5 元数据
-        l.onProgress(Progress(4, "元数据", 0f))
-        val metaStart = System.nanoTime()
-        var made = 0
-        for (i in 0 until META_FILES) {
-            if (cancelled) break
-            val f = File(dir, "m$i")
-            if (f.createNewFile()) made++
-            f.length()
-            if (i % 20 == 0) l.onProgress(Progress(4, "元数据", i.toFloat() / META_FILES))
+        val writeEnd = SystemClock.elapsedRealtime()
+        val seqWrite = mbPerSec(written, writeEnd - writeStart)
+        if (spaceLimited) {
+            l.onProgress(Progress("写入受空间限制", 0.0, writeEnd - allStart, totalMs,
+                    fraction(writeEnd - allStart, totalMs)))
         }
-        val metaSec = max((System.nanoTime() - metaStart) / 1e9, 0.0001)
-        val meta = made / metaSec
-        for (i in 0 until META_FILES) File(dir, "m$i").delete()
 
-        // 6 fsync 延迟
-        l.onProgress(Progress(5, "fsync 延迟", 0f))
-        val fsyncFile = File(dir, "fsync.bin")
-        val fr = RandomAccessFile(fsyncFile, "rw")
-        val fb = ByteBuffer.allocateDirect(4096)
-        val times = ArrayList<Double>(FSYNC_OPS)
-        for (i in 0 until FSYNC_OPS) {
-            if (cancelled) break
-            fb.clear(); fb.putInt(i); fb.flip()
-            fr.channel.write(fb, 0)
-            val s = System.nanoTime()
-            fr.channel.force(true)
-            times.add((System.nanoTime() - s) / 1e6)
-            if (i % 4 == 0) l.onProgress(Progress(5, "fsync 延迟", i.toFloat() / FSYNC_OPS))
+        // 读取阶段：循环读刚写的文件，跑满剩余一半时间。
+        l.onProgress(Progress("正在读取…", 0.0, writeEnd - allStart, totalMs,
+                fraction(writeEnd - allStart, totalMs)))
+        val readStart = SystemClock.elapsedRealtime()
+        val readWindow = SpeedWindow(readStart)
+        var readTotal = 0L
+        var readReportAt = readStart
+        ch.position(0)
+        while (!cancelled) {
+            val now = SystemClock.elapsedRealtime()
+            if (now - readStart >= readMs) break
+            if (written <= 0L) break
+            buf.clear()
+            val n = ch.read(buf)
+            if (n <= 0) {
+                ch.position(0)
+                continue
+            }
+            readTotal += n
+            readWindow.add(now, readTotal)
+            if (now - readReportAt >= 200L) {
+                readReportAt = now
+                report(l, "正在读取…", readWindow.instant(now), allStart, totalMs, now)
+            }
         }
-        fr.close()
-        val avg = if (times.isEmpty()) 0.0 else times.average()
-        val p95 = if (times.isEmpty()) 0.0 else times.sorted()[((times.size - 1) * 0.95).toInt()]
+        val readEnd = SystemClock.elapsedRealtime()
+        val seqRead = mbPerSec(readTotal, readEnd - readStart)
+        if (cancelled) throw CancellationException("cancelled")
 
-        raf.close()
+        val elapsed = readEnd - allStart
         val grade = BenchGrade.grade(seqWrite)
-        val weakest = BenchGrade.weakest(seqWrite, seqRead, randReadIops, randWriteIops, meta, avg)
-        return Result(seqWrite, seqRead, randReadIops, randReadMb, qd32, randWriteIops, meta,
-                avg, p95, writeBytes, cacheNote, grade, weakest,
-                (System.nanoTime() - t0) / 1_000_000L)
+        val weakest = if (seqWrite <= seqRead) "顺序写" else "顺序读"
+        val note = if (spaceLimited) "受可用空间限制，写入阶段提前结束" else ""
+        return Result(
+                seqWrite, seqRead,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                written, note, grade, weakest, elapsed,
+        )
+        } finally {
+            try {
+                raf.close()
+            } catch (_: Throwable) {
+            }
+        }
     }
 
-    private fun mbPerSec(bytes: Long, nanos: Long): Double {
-        val sec = max(nanos / 1e9, 0.0001)
+    private fun report(
+            l: Listener,
+            phase: String,
+            instant: Double,
+            allStart: Long,
+            totalMs: Long,
+            now: Long,
+    ) {
+        val elapsed = now - allStart
+        l.onProgress(Progress(phase, instant, elapsed, totalMs, fraction(elapsed, totalMs)))
+    }
+
+    private fun fraction(elapsed: Long, total: Long): Float =
+            (elapsed.toFloat() / total.coerceAtLeast(1L)).coerceIn(0f, 1f)
+
+    private fun mbPerSec(bytes: Long, millis: Long): Double {
+        val sec = max(millis / 1000.0, 0.001)
         return bytes / MB / sec
+    }
+
+    /** 最近 1 秒的滑动窗口；记录 (时间, 累计字节)。 */
+    private class SpeedWindow(now: Long) {
+        private val times = java.util.ArrayDeque<Long>()
+        private val totals = java.util.ArrayDeque<Long>()
+
+        init {
+            times.add(now)
+            totals.add(0L)
+        }
+
+        fun add(now: Long, total: Long) {
+            times.add(now)
+            totals.add(total)
+        }
+
+        fun instant(now: Long): Double {
+            while (times.size > 1 && now - times.first > 1000L) {
+                times.removeFirst()
+                totals.removeFirst()
+            }
+            val startTime = times.first
+            val startBytes = totals.first
+            val endBytes = totals.last
+            val windowSec = max((now - startTime) / 1000.0, 0.001)
+            return (endBytes - startBytes) / MB / windowSec
+        }
     }
 
     private fun clear(dir: File) {

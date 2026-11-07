@@ -318,7 +318,7 @@ class MainActivity : Activity() {
         searchPage.onDeleteRequested = { node -> deleteSingle(node) }
         cleanPage.store = store
         cleanPage.rootPath = rootPath()
-        benchPage.onStart = { startBench() }
+        benchPage.onStart = { seconds -> startBench(seconds) }
         benchPage.onCancel = {
             BenchEngine.cancel()
             benchRunning = false
@@ -1139,22 +1139,24 @@ class MainActivity : Activity() {
         }, "SpaceLens-Export").start()
     }
 
-    private fun startBench() {
+    private fun startBench(durationSec: Int) {
         if (benchRunning) return
+        val seconds = durationSec.coerceIn(5, 10)
         Dialogs.showMessage(this, "存储测速",
-                "会占用约 128 MB 临时空间，测试文件只写入应用 cacheDir，测完立即清理。\n\n" +
+                "将跑满 $seconds 秒：前一半写、后一半读。\n" +
+                        "测试文件只写入应用 cacheDir，结束立即清理；写入量受可用空间 30% 和 4GB 上限保护。\n\n" +
                         "测试期间请不要退出或锁屏，可随时取消。",
-                positive = "开始测速", onPositive = { runBench() },
+                positive = "开始测速", onPositive = { runBench(seconds) },
                 negative = "取消", onNegative = {})
     }
 
-    private fun runBench() {
+    private fun runBench(durationSec: Int) {
         benchRunning = true
+        benchPage.clearResult()
         benchPage.setRunning(true)
-        benchPage.setProgress("准备", 0f)
-        BenchEngine.run(this, object : BenchEngine.Listener {
+        BenchEngine.run(this, durationSec * 1000L, object : BenchEngine.Listener {
             override fun onProgress(p: BenchEngine.Progress) {
-                runOnUiThread { benchPage.setProgress(p.label, p.fraction) }
+                runOnUiThread { benchPage.setProgress(p) }
             }
 
             override fun onFinished(r: BenchEngine.Result) {

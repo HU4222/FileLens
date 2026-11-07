@@ -1,226 +1,320 @@
 package com.spacelens.app.ui
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.RectF
-import android.view.MotionEvent
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
 import android.view.View
+import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
-import kotlin.math.cos
-import kotlin.math.sin
+import android.widget.TextView
+import com.spacelens.app.bench.BenchEngine
+import java.util.Locale
+import kotlin.math.max
 
-/** 测速页：仪表盘 + 六项测试卡（M4 接 BenchEngine）。 */
+/** 测速页：5/10 秒顺序读写，实时速度 + 平均速度 + BenchGrade 分级。 */
 class BenchPage(context: Context) : FrameLayout(context) {
 
-    var onStart: (() -> Unit)? = null
+    var onStart: ((Int) -> Unit)? = null
     var onCancel: (() -> Unit)? = null
 
-    private val scroll = ScrollView(context)
-    private val content = Content(context)
+    private val speedText = TextView(context)
+    private val speedUnit = TextView(context)
+    private val phaseText = TextView(context)
+    private val timeText = TextView(context)
+    private val progress = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal)
+    private val writeValue = TextView(context)
+    private val readValue = TextView(context)
+    private val gradeText = TextView(context)
+    private val conclusion = TextView(context)
+    private val note = TextView(context)
+    private val startBtn = Button(context)
+    private val chip5 = TextView(context)
+    private val chip10 = TextView(context)
+
+    private var durationSec = 10
     private var running = false
-    private var result: com.spacelens.app.bench.BenchEngine.Result? = null
-    private var progressLabel = ""
-    private var progressFrac = 0f
+    private var result: BenchEngine.Result? = null
+    private var lastTotalMs = 10000L
 
     init {
-        scroll.isFillViewport = true
-        scroll.overScrollMode = OVER_SCROLL_NEVER
-        scroll.isVerticalScrollBarEnabled = false
+        setBackgroundColor(Theme.palette.bg)
+        val scroll = ScrollView(context).apply {
+            isFillViewport = true
+            overScrollMode = OVER_SCROLL_NEVER
+            isVerticalScrollBarEnabled = false
+        }
+        val content = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18f), dp(12f), dp(18f), dp(16f))
+        }
         scroll.addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+
+        content.addView(TextView(context).apply {
+            text = "存储测速"
+            textSize = 20f
+            typeface = Draw.SANS_MEDIUM
+            setTextColor(Theme.palette.text)
+        })
+        content.addView(TextView(context).apply {
+            text = "顺序读写 · 前一半写、后一半读"
+            textSize = 12f
+            setTextColor(Theme.palette.muted)
+            setPadding(0, dp(4f), 0, dp(10f))
+        })
+
+        content.addView(TextView(context).apply {
+            text = "测试时长"
+            textSize = 12f
+            setTextColor(Theme.palette.text2)
+        })
+        val chips = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(6f), 0, dp(10f))
+        }
+        for ((label, seconds, chip) in arrayOf(
+                Triple("5 秒", 5, chip5),
+                Triple("10 秒", 10, chip10),
+        )) {
+            chip.text = label
+            chip.textSize = 11.5f
+            chip.gravity = Gravity.CENTER
+            chip.setPadding(dp(16f), dp(7f), dp(16f), dp(7f))
+            chip.setOnClickListener {
+                if (running) return@setOnClickListener
+                durationSec = seconds
+                styleChips()
+                if (result == null) {
+                    lastTotalMs = seconds * 1000L
+                    timeText.text = String.format(Locale.US, "0.0 / %.1f s", seconds.toFloat())
+                }
+            }
+            val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.rightMargin = dp(8f)
+            chips.addView(chip, lp)
+        }
+        content.addView(chips)
+        styleChips()
+
+        val speedCard = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(16f), dp(16f), dp(16f), dp(14f))
+            background = rounded(Theme.palette.panel, Theme.palette.line, Radius.PANEL)
+        }
+        phaseText.apply {
+            text = "准备"
+            textSize = 12f
+            setTextColor(Theme.palette.muted)
+        }
+        speedCard.addView(phaseText)
+        speedText.apply {
+            text = "—"
+            textSize = 44f
+            typeface = Draw.SANS_MEDIUM
+            setTextColor(Theme.palette.brand)
+            gravity = Gravity.CENTER
+        }
+        val slp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        slp.topMargin = dp(2f)
+        speedCard.addView(speedText, slp)
+        speedUnit.apply {
+            text = "MB/s · 实时"
+            textSize = 11f
+            setTextColor(Theme.palette.muted)
+            gravity = Gravity.CENTER
+        }
+        speedCard.addView(speedUnit)
+        timeText.apply {
+            text = "0.0 / 10.0 s"
+            textSize = 12f
+            setTextColor(Theme.palette.text2)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8f), 0, dp(4f))
+        }
+        speedCard.addView(timeText, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        progress.max = 1000
+        progress.progress = 0
+        progress.progressTintList = android.content.res.ColorStateList.valueOf(Theme.palette.brand)
+        speedCard.addView(progress, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(5f)))
+        val speedLp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        speedLp.topMargin = dp(10f)
+        content.addView(speedCard, speedLp)
+
+        val results = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(12f), 0, 0)
+        }
+        content.addView(results, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        results.addView(resultCard("平均写入", writeValue), weightParams(1f, 0))
+        results.addView(resultCard("平均读取", readValue), weightParams(1f, 8))
+
+        gradeText.apply {
+            text = "尚未测试"
+            textSize = 13f
+            typeface = Draw.SANS_MEDIUM
+            setTextColor(Theme.palette.muted)
+            setPadding(0, dp(12f), 0, 0)
+        }
+        content.addView(gradeText)
+        conclusion.apply {
+            text = "选择 5 秒或 10 秒，点开始测速。"
+            textSize = 12f
+            setTextColor(Theme.palette.text2)
+            setPadding(0, dp(4f), 0, 0)
+        }
+        content.addView(conclusion)
+        note.apply {
+            text = "测试文件只写在 cacheDir，结束即删。"
+            textSize = 10.5f
+            setTextColor(Theme.palette.muted)
+            setPadding(0, dp(4f), 0, dp(12f))
+        }
+        content.addView(note)
+
+        startBtn.apply {
+            text = "开始测速"
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            background = rounded(Theme.palette.brand, Theme.palette.brand, Radius.PILL)
+            setOnClickListener {
+                if (running) onCancel?.invoke() else onStart?.invoke(durationSec)
+            }
+        }
+        content.addView(startBtn, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(46f)))
     }
 
     fun setRunning(running: Boolean) {
         this.running = running
-        content.invalidate()
+        startBtn.text = if (running) "取消测速" else "开始测速"
+        startBtn.background = rounded(
+                if (running) Theme.palette.danger else Theme.palette.brand,
+                if (running) Theme.palette.danger else Theme.palette.brand,
+                Radius.PILL)
+        chip5.isEnabled = !running
+        chip10.isEnabled = !running
+        chip5.alpha = if (running) 0.45f else 1f
+        chip10.alpha = if (running) 0.45f else 1f
+        if (running) {
+            progress.progress = 0
+            phaseText.text = "准备"
+            speedText.text = "0.0"
+            speedUnit.text = "MB/s · 实时"
+        }
     }
 
-    fun setProgress(label: String, fraction: Float) {
-        progressLabel = label
-        progressFrac = fraction
-        content.invalidate()
+    fun setProgress(p: BenchEngine.Progress) {
+        lastTotalMs = p.totalMs
+        phaseText.text = p.phase
+        speedText.text = String.format(Locale.US, "%.1f", p.instantMBps)
+        timeText.text = String.format(Locale.US, "%.1f / %.1f s",
+                p.elapsedMs / 1000f, p.totalMs / 1000f)
+        progress.progress = (p.fraction * 1000f).toInt().coerceIn(0, 1000)
     }
 
-    fun setResult(r: com.spacelens.app.bench.BenchEngine.Result) {
+    fun setResult(r: BenchEngine.Result) {
         result = r
         running = false
-        content.invalidate()
+        startBtn.text = "再测一次"
+        startBtn.background = rounded(Theme.palette.brand, Theme.palette.brand, Radius.PILL)
+        chip5.isEnabled = true
+        chip10.isEnabled = true
+        chip5.alpha = 1f
+        chip10.alpha = 1f
+        phaseText.text = "完成"
+        speedText.text = String.format(Locale.US, "%.1f", r.seqWriteMb)
+        speedUnit.text = "MB/s · 平均写入"
+        timeText.text = String.format(Locale.US, "%.1f / %.1f s",
+                r.elapsedMs / 1000f, lastTotalMs / 1000f)
+        progress.progress = 1000
+        writeValue.text = String.format(Locale.US, "%.1f", r.seqWriteMb)
+        readValue.text = String.format(Locale.US, "%.1f", r.seqReadMb)
+        gradeText.text = "分级 · ${r.grade}"
+        gradeText.setTextColor(Theme.palette.brand)
+        conclusion.text = if (r.seqWriteMb >= 80.0) {
+            String.format(Locale.US, "这块盘传大文件大概 %.0f MB/s，够用。", r.seqWriteMb)
+        } else {
+            String.format(Locale.US, "这块盘偏慢，传大文件约 %.0f MB/s。", r.seqWriteMb)
+        }
+        note.text = if (r.cacheNote.isNotEmpty()) r.cacheNote
+        else "测试文件只写在 cacheDir，结束即删。"
     }
 
     fun clearResult() {
         result = null
-        content.invalidate()
+        speedText.text = "—"
+        speedUnit.text = "MB/s · 实时"
+        phaseText.text = "准备"
+        timeText.text = String.format(Locale.US, "0.0 / %.1f s", durationSec.toFloat())
+        progress.progress = 0
+        writeValue.text = "—"
+        readValue.text = "—"
+        gradeText.text = "尚未测试"
+        gradeText.setTextColor(Theme.palette.muted)
+        conclusion.text = "选择 5 秒或 10 秒，点开始测速。"
+        note.text = "测试文件只写在 cacheDir，结束即删。"
     }
 
-    private inner class Content(context: Context) : View(context) {
-        private val d = resources.displayMetrics.density
-        private val margin = Breakpoints.metrics(context).marginDp * d
-        private val gaugeH = 222f * d
-        private val cardH = 96f * d
-        private val gap = 10f * d
-        private val buttonRect = RectF()
-        private var pressed = false
-
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val w = MeasureSpec.getSize(widthMeasureSpec)
-            val h = (8f * d + gaugeH + 14f * d + 22f * d + 3 * cardH + 2 * gap + 16f * d +
-                    46f * d + 60f * d).toInt()
-            setMeasuredDimension(w, h)
+    private fun resultCard(label: String, value: TextView): LinearLayout {
+        val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12f), dp(12f), dp(12f), dp(12f))
+            background = rounded(Theme.palette.panelSoft, Theme.palette.line, Radius.PANEL)
         }
-
-        override fun onDraw(canvas: Canvas) {
-            val p = Theme.palette
-            val w = width.toFloat()
-            var y = 8f * d
-
-            // 仪表盘
-            val gauge = RectF(margin, y, w - margin, y + gaugeH)
-            Draw.card(canvas, gauge, Radius.PANEL * d, p.panel, p.line)
-            drawGauge(canvas, gauge, p)
-            y = gauge.bottom + 14f * d
-
-            val head = Draw.text(context, 13f, p.text2, medium = true)
-            canvas.drawText("六项测试", margin + 2f * d, y + 14f * d, head)
-            val hint = Draw.text(context, 10f, p.muted, align = Paint.Align.RIGHT)
-            val hintText = if (running) "$progressLabel ${(progressFrac * 100).toInt()}%" else "串行执行 · 可中途取消"
-            canvas.drawText(hintText, w - margin - 2f * d, y + 14f * d, hint)
-            y += 22f * d
-
-            val labels = arrayOf("顺序写", "顺序读", "随机读 4K", "随机写 4K", "元数据", "fsync 延迟")
-            val units = arrayOf("MB/s", "MB/s", "IOPS", "IOPS", "files/s", "ms")
-            val cols = 2
-            val cw = (w - margin * 2 - gap) / cols
-            for (i in labels.indices) {
-                val col = i % cols
-                val row = i / cols
-                val left = margin + col * (cw + gap)
-                val top = y + row * (cardH + gap)
-                val rect = RectF(left, top, left + cw, top + cardH)
-                Draw.card(canvas, rect, Radius.PANEL * d, p.panel, p.line)
-                val lp = Draw.text(context, 10.5f, p.muted)
-                canvas.drawText(labels[i], rect.left + 14f * d, rect.top + 24f * d, lp)
-                val r = result
-                val text = when (i) {
-                    0 -> r?.let { String.format(java.util.Locale.US, "%.0f", it.seqWriteMb) } ?: "—"
-                    1 -> r?.let { String.format(java.util.Locale.US, "%.0f", it.seqReadMb) } ?: "—"
-                    2 -> r?.let { String.format(java.util.Locale.US, "%.0f", it.randReadIops) } ?: "—"
-                    3 -> r?.let { String.format(java.util.Locale.US, "%.0f", it.randWriteIops) } ?: "—"
-                    4 -> r?.let { String.format(java.util.Locale.US, "%.0f", it.metaFiles) } ?: "—"
-                    else -> r?.let { String.format(java.util.Locale.US, "%.1f", it.fsyncAvgMs) } ?: "—"
-                }
-                val vp = Draw.text(context, 24f, p.text, medium = true)
-                canvas.drawText(text, rect.left + 14f * d, rect.top + 58f * d, vp)
-                val up = Draw.text(context, 9f, p.muted)
-                canvas.drawText(units[i], rect.left + 14f * d, rect.top + 76f * d, up)
-                val badge = RectF(rect.right - 50f * d, rect.top + 12f * d, rect.right - 12f * d, rect.top + 30f * d)
-                canvas.drawRoundRect(badge, 9f * d, 9f * d, Draw.fill(p.panelSunken))
-                val bp = Draw.text(context, 8.5f, if (result != null) p.brand else p.muted, align = Paint.Align.CENTER)
-                canvas.drawText(if (result != null) result!!.grade else "待测", badge.centerX(), badge.centerY() + 3f * d, bp)
-            }
-            y += 3 * cardH + 2 * gap + 16f * d
-
-            buttonRect.set(margin, y, w - margin, y + 46f * d)
-            val base = if (running) p.danger else p.brand
-            canvas.drawRoundRect(buttonRect, 23f * d, 23f * d,
-                    Draw.fill(if (pressed) Theme.blend(base, p.brand2, 0.35f) else base))
-            val bt = Draw.text(context, 13f, 0xFFFFFFFF.toInt(), medium = true, align = Paint.Align.CENTER)
-            canvas.drawText(if (running) "取消测速" else "开始测速", buttonRect.centerX(), buttonRect.centerY() + 4.5f * d, bt)
-            y = buttonRect.bottom + 20f * d
-
-            val r = result
-            val disclaimer = Draw.text(context, 10f, p.text2, align = Paint.Align.LEFT)
-            canvas.drawText(if (r != null) {
-                String.format(java.util.Locale.US, "写入 %.0f MB/s · 读取 %.0f MB/s · %s",
-                        r.seqWriteMb, r.seqReadMb, r.grade)
-            } else {
-                "会占用约 128 MB 临时空间，测完自动清理。"
-            }, margin + 2f * d, y, disclaimer)
-            val note = Draw.text(context, 9.5f, p.muted, align = Paint.Align.LEFT)
-            val conclusion = if (r == null) {
-                "实际速度受主控、温度、剩余空间与文件系统影响，仅供参考。"
-            } else if (r.seqWriteMb >= 80.0) {
-                String.format(java.util.Locale.US, "这块盘传大文件大概 %.0f MB/s，够用。", r.seqWriteMb)
-            } else {
-                String.format(java.util.Locale.US, "这块盘偏慢，传大文件约 %.0f MB/s。", r.seqWriteMb)
-            }
-            canvas.drawText(conclusion + " · 测试文件只写在 cacheDir，结束即删。",
-                    margin + 2f * d, y + 17f * d, note)
+        card.addView(TextView(context).apply {
+            text = label
+            textSize = 11f
+            setTextColor(Theme.palette.muted)
+        })
+        value.apply {
+            text = "—"
+            textSize = 26f
+            typeface = Draw.SANS_MEDIUM
+            setTextColor(Theme.palette.text)
+            setPadding(0, dp(2f), 0, 0)
         }
+        card.addView(value)
+        card.addView(TextView(context).apply {
+            text = "MB/s"
+            textSize = 10f
+            setTextColor(Theme.palette.muted)
+        })
+        return card
+    }
 
-        private fun drawGauge(canvas: Canvas, r: RectF, p: Palette) {
-            val cx = r.centerX()
-            val cy = r.top + 142f * d
-            val radius = 74f * d
-            val arc = RectF(cx - radius, cy - radius, cx + radius, cy + radius)
-            val track = Draw.stroke(p.line, 9f * d)
-            canvas.drawArc(arc, 160f, 220f, false, track)
-
-            // 刻度
-            val tick = Draw.stroke(p.lineStrong, 1.6f * d)
-            for (i in 0..20) {
-                val a = Math.toRadians((160f + 220f * i / 20f).toDouble())
-                val inner = radius - 15f * d
-                val outer = radius - (if (i % 5 == 0) 7f * d else 11f * d)
-                canvas.drawLine(
-                        cx + (inner * cos(a)).toFloat(), cy + (inner * sin(a)).toFloat(),
-                        cx + (outer * cos(a)).toFloat(), cy + (outer * sin(a)).toFloat(),
-                        tick,
-                )
+    private fun weightParams(weight: Float, leftMargin: Int): LinearLayout.LayoutParams =
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, weight).apply {
+                this.leftMargin = dp(leftMargin.toFloat())
             }
-            // 指针（静止在起点）
-            val a = Math.toRadians(160.0)
-            val nx = cx + (radius - 30f * d) * cos(a).toFloat()
-            val ny = cy + (radius - 30f * d) * sin(a).toFloat()
-            canvas.drawLine(cx, cy, nx, ny, Draw.stroke(p.brand, 2.6f * d))
-            canvas.drawCircle(cx, cy, 5f * d, Draw.fill(p.brand))
-            canvas.drawCircle(cx, cy, 2f * d, Draw.fill(p.panel))
 
-            val value = Draw.text(context, 30f, p.text, medium = true, align = Paint.Align.CENTER)
-            val gv = result?.let { String.format(java.util.Locale.US, "%.0f", it.seqWriteMb) } ?: "—"
-            canvas.drawText(gv, cx, cy - 4f * d, value)
-            val unit = Draw.text(context, 10f, p.muted, align = Paint.Align.CENTER)
-            canvas.drawText("MB/s · 顺序写", cx, cy + 18f * d, unit)
-
-            val title = Draw.text(context, 11f, p.muted, align = Paint.Align.LEFT)
-            canvas.drawText("闪存测速", r.left + 17f * d, r.top + 25f * d, title)
-            val subject = Draw.text(context, 10.5f, p.text2, medium = true)
-            canvas.drawText("顺序写", r.left + 17f * d, r.top + 46f * d, subject)
-            val state = Draw.text(context, 9.5f, if (result != null) p.brand else p.warn, medium = true, align = Paint.Align.RIGHT)
-            canvas.drawText(result?.grade ?: "尚未测试", r.right - 17f * d, r.top + 25f * d, state)
-        }
-
-        override fun onTouchEvent(event: MotionEvent): Boolean {
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    pressed = buttonRect.contains(event.x, event.y)
-                    invalidate()
-                    return true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (pressed && !buttonRect.contains(event.x, event.y)) {
-                        pressed = false
-                        invalidate()
-                    }
-                    return true
-                }
-                MotionEvent.ACTION_UP -> {
-                    val hit = buttonRect.contains(event.x, event.y)
-                    pressed = false
-                    invalidate()
-                    if (hit) {
-                        if (running) onCancel?.invoke() else onStart?.invoke()
-                    }
-                    return true
-                }
-                MotionEvent.ACTION_CANCEL -> {
-                    pressed = false
-                    invalidate()
-                    return true
-                }
-            }
-            return super.onTouchEvent(event)
+    private fun styleChips() {
+        for ((seconds, chip) in arrayOf(5 to chip5, 10 to chip10)) {
+            val active = seconds == durationSec
+            chip.setTextColor(if (active) Color.WHITE else Theme.palette.text2)
+            chip.background = rounded(
+                    if (active) Theme.palette.brand else Theme.palette.panelSunken,
+                    if (active) Theme.palette.brand else Theme.palette.line,
+                    Radius.PILL)
         }
     }
+
+    private fun rounded(fill: Int, stroke: Int, radius: Float): GradientDrawable =
+            GradientDrawable().apply {
+                cornerRadius = dp(radius).toFloat()
+                setColor(fill)
+                setStroke(max(1, dp(1f)), stroke)
+            }
+
+    private fun dp(v: Float): Int = (v * resources.displayMetrics.density).toInt()
 }
