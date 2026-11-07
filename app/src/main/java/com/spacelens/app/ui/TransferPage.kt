@@ -20,7 +20,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -47,10 +49,14 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
     companion object {
         const val REQ_FILE = 5010
+        private const val MAIN_BALL_DP = 58f
+        private const val SAT_BALL_DP = 46f
+        private const val SAT_GAP_DP = 52f
+        private const val BALL_MARGIN_DP = 16f
+        private const val SAT_MARGIN_DP = 22f
     }
 
     private val status = TextView(context)
-    private val other = TextView(context)
     private val web = WebView(context)
     private val errorView = LinearLayout(context)
     private val errorText = TextView(context)
@@ -70,6 +76,21 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private var loadedUrl = ""
     private var panelShown = false
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+
+    private val scrim = View(context)
+    private val mainBall = FrameLayout(context)
+    private val mainBallLabel = TextView(context)
+    private val satBalls = ArrayList<FrameLayout>()
+    private val satLabels = ArrayList<TextView>()
+    private var ballsExpanded = false
+    private var ballAnim: Motion.Animation? = null
+    private var pressAnim: Motion.Animation? = null
+    private var longPress: Runnable? = null
+    private var longPressed = false
+    private var ballDownX = 0f
+    private var ballDownY = 0f
+    private val satViews = arrayOf("browse", "send", "clip", "about")
+    private val satNames = arrayOf("浏览", "传文件", "剪贴板", "我的")
     private val prefs = context.getSharedPreferences("filelens_transfer", Context.MODE_PRIVATE)
 
     init {
@@ -88,17 +109,6 @@ class TransferPage(context: Context) : FrameLayout(context) {
             setTextColor(Theme.palette.muted)
         }
         bar.addView(status, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        other.apply {
-            text = "其他设备"
-            textSize = 12f
-            gravity = Gravity.CENTER
-            setTextColor(Theme.palette.brand)
-            setPadding(dp(10f), dp(6f), dp(10f), dp(6f))
-            background = rounded(Theme.palette.brandSoft, Theme.palette.brandSoft, Radius.PILL)
-            setOnClickListener { showPanel() }
-        }
-        bar.addView(other, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         content.addView(bar, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dp(48f)))
@@ -111,7 +121,12 @@ class TransferPage(context: Context) : FrameLayout(context) {
             settings.cacheMode = WebSettings.LOAD_NO_CACHE
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    injectViewBridge(view)
+                }
+            }
             webChromeClient = object : WebChromeClient() {
                 override fun onShowFileChooser(
                         webView: WebView?,
@@ -159,6 +174,12 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 @JavascriptInterface
                 fun isAndroid(): Boolean = true
             }, "androidBridge")
+            addJavascriptInterface(object {
+                @JavascriptInterface
+                fun onViewChanged(view: String) {
+                    handler.post { updateBallLabel(view) }
+                }
+            }, "__dlNative")
         }
         content.addView(web, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -195,9 +216,254 @@ class TransferPage(context: Context) : FrameLayout(context) {
         errorView.addView(retry, rlp)
         addView(errorView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
+        buildBalls()
         buildPanel()
         addView(panel, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         updateUi()
+    }
+
+    private fun buildBalls() {
+        scrim.setBackgroundColor(Color.TRANSPARENT)
+        scrim.isClickable = true
+        scrim.visibility = View.GONE
+        scrim.setOnClickListener { collapseBalls() }
+        addView(scrim, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+
+        for (i in satViews.indices) {
+            val ball = makeBall(SAT_BALL_DP.toInt(), Glass.fill(), 10f, satNames[i])
+            val ballLp = LayoutParams(dp(SAT_BALL_DP), dp(SAT_BALL_DP), Gravity.BOTTOM or Gravity.RIGHT)
+            ballLp.rightMargin = dp(SAT_MARGIN_DP)
+            ballLp.bottomMargin = dp(SAT_MARGIN_DP)
+            ball.visibility = View.INVISIBLE
+            ball.alpha = 0f
+            ball.scaleX = 0.7f
+            ball.scaleY = 0.7f
+            ball.setOnClickListener {
+                switchView(satViews[i])
+                collapseBalls()
+            }
+            addView(ball, ballLp)
+            satBalls.add(ball)
+
+            val label = TextView(context).apply {
+                text = satNames[i]
+                textSize = 10f
+                gravity = Gravity.CENTER
+                setTextColor(Theme.palette.text2)
+                visibility = View.INVISIBLE
+                alpha = 0f
+            }
+            val labelLp = LayoutParams(dp(MAIN_BALL_DP), dp(12f), Gravity.BOTTOM or Gravity.RIGHT)
+            labelLp.rightMargin = dp(BALL_MARGIN_DP)
+            labelLp.bottomMargin = 0
+            addView(label, labelLp)
+            satLabels.add(label)
+        }
+
+        mainBall.addView(View(context).apply {
+            background = Glass.background(
+                    Color.argb(56, 139, 135, 255), Glass.stroke(), dp(29f).toFloat())
+            Glass.applyBlur(this, 20f)
+        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        mainBallLabel.apply {
+            text = "浏览"
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.text)
+        }
+        mainBall.addView(mainBallLabel, LayoutParams(
+                LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        mainBall.setOnTouchListener { _, ev -> onMainBallTouch(ev) }
+        val mainLp = LayoutParams(dp(MAIN_BALL_DP), dp(MAIN_BALL_DP), Gravity.BOTTOM or Gravity.RIGHT)
+        mainLp.rightMargin = dp(BALL_MARGIN_DP)
+        mainLp.bottomMargin = dp(BALL_MARGIN_DP)
+        addView(mainBall, mainLp)
+    }
+
+    private fun makeBall(size: Int, fill: Int, textSize: Float, text: String): FrameLayout {
+        val root = FrameLayout(context)
+        val bg = View(context).apply {
+            background = Glass.background(fill, Glass.stroke(), dp(size / 2f).toFloat())
+            Glass.applyBlur(this, 20f)
+        }
+        root.addView(bg, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        root.addView(TextView(context).apply {
+            this.text = text
+            this.textSize = textSize
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.text)
+        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        root.isClickable = true
+        return root
+    }
+
+    private fun onMainBallTouch(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                longPressed = false
+                ballDownX = ev.x
+                ballDownY = ev.y
+                scaleMain(0.94f)
+                val job = Runnable {
+                    longPressed = true
+                    showPanel()
+                }
+                longPress = job
+                handler.postDelayed(job, 300L)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val slop = ViewConfiguration.get(context).scaledTouchSlop
+                if (Math.abs(ev.x - ballDownX) > slop || Math.abs(ev.y - ballDownY) > slop) {
+                    longPress?.let { handler.removeCallbacks(it) }
+                    longPress = null
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                longPress?.let { handler.removeCallbacks(it) }
+                longPress = null
+                scaleMain(1f)
+                if (ev.actionMasked == MotionEvent.ACTION_UP && !longPressed) {
+                    if (ballsExpanded) collapseBalls() else expandBalls()
+                }
+            }
+        }
+        return true
+    }
+
+    private fun scaleMain(target: Float) {
+        pressAnim?.cancel()
+        val from = mainBall.scaleX
+        pressAnim = Motion.tween(130, Ease::softOut, { t ->
+            val v = from + (target - from) * t
+            mainBall.scaleX = v
+            mainBall.scaleY = v
+        })
+    }
+
+    private fun expandBalls() {
+        if (ballsExpanded) return
+        ballAnim?.cancel()
+        scrim.visibility = View.VISIBLE
+        for (i in satBalls.indices) {
+            satBalls[i].visibility = View.VISIBLE
+            satLabels[i].visibility = View.VISIBLE
+        }
+        val fromX = FloatArray(satBalls.size) { satBalls[it].translationX }
+        val fromScale = FloatArray(satBalls.size) { satBalls[it].scaleX }
+        val fromAlpha = FloatArray(satBalls.size) { satBalls[it].alpha }
+        ballAnim = Motion.tween(260, Ease::linear, { t ->
+            val elapsed = t * 260f
+            for (i in satBalls.indices) {
+                val delay = i * 30f
+                val local = ((elapsed - delay) / (260f - delay)).coerceIn(0f, 1f)
+                val e = ballEase(local)
+                val targetX = -dp(SAT_GAP_DP * (i + 1))
+                satBalls[i].translationX = fromX[i] + (targetX - fromX[i]) * e
+                satBalls[i].scaleX = fromScale[i] + (1f - fromScale[i]) * e
+                satBalls[i].scaleY = satBalls[i].scaleX
+                satBalls[i].alpha = fromAlpha[i] + (1f - fromAlpha[i]) * e
+                satLabels[i].translationX = satBalls[i].translationX
+                satLabels[i].alpha = satBalls[i].alpha
+            }
+        }, {
+            ballsExpanded = true
+        })
+    }
+
+    private fun collapseBalls() {
+        if (!ballsExpanded) return
+        ballAnim?.cancel()
+        val fromX = FloatArray(satBalls.size) { satBalls[it].translationX }
+        val fromScale = FloatArray(satBalls.size) { satBalls[it].scaleX }
+        val fromAlpha = FloatArray(satBalls.size) { satBalls[it].alpha }
+        ballAnim = Motion.tween(200, Ease::linear, { t ->
+            val elapsed = t * 200f
+            for (i in satBalls.indices) {
+                val delay = i * 30f
+                val local = ((elapsed - delay) / (200f - delay)).coerceIn(0f, 1f)
+                val e = ballEase(local)
+                satBalls[i].translationX = fromX[i] * (1f - e)
+                satBalls[i].scaleX = fromScale[i] + (0.7f - fromScale[i]) * e
+                satBalls[i].scaleY = satBalls[i].scaleX
+                satBalls[i].alpha = fromAlpha[i] * (1f - e)
+                satLabels[i].translationX = satBalls[i].translationX
+                satLabels[i].alpha = satBalls[i].alpha
+            }
+        }, {
+            for (i in satBalls.indices) {
+                satBalls[i].visibility = View.INVISIBLE
+                satLabels[i].visibility = View.INVISIBLE
+            }
+            scrim.visibility = View.GONE
+            ballsExpanded = false
+        })
+    }
+
+    private fun ballEase(t: Float): Float {
+        fun bezier(p: Float, a: Float, b: Float): Float {
+            val u = 1f - p
+            return 3f * u * u * p * a + 3f * u * p * p * b + p * p * p
+        }
+        var lo = 0f
+        var hi = 1f
+        repeat(18) {
+            val mid = (lo + hi) / 2f
+            if (bezier(mid, 0.22f, 0.3f) < t) lo = mid else hi = mid
+        }
+        return bezier((lo + hi) / 2f, 0.9f, 1f)
+    }
+
+    private fun switchView(view: String) {
+        web.evaluateJavascript(
+                "document.querySelector('[data-view=\"$view\"]')?.click()", null)
+        handler.postDelayed({ readCurrentView() }, 200L)
+    }
+
+    private fun injectViewBridge(view: WebView?) {
+        val js = """
+            (function(){
+              if (window.__flBallHooked) return;
+              window.__flBallHooked = true;
+              function current(){
+                var e=document.querySelector('.view.is-active')||document.querySelector('[data-view].is-active');
+                if(!e)return '';
+                if(e.id&&e.id.indexOf('view-')===0)return e.id.substring(5);
+                return e.getAttribute('data-view')||'';
+              }
+              function notify(){
+                try{var v=current();if(v&&window.__dlNative)window.__dlNative.onViewChanged(v);}catch(e){}
+              }
+              document.addEventListener('click',function(ev){
+                var n=ev.target;
+                while(n&&n!==document){
+                  if(n.getAttribute&&n.getAttribute('data-view')){setTimeout(notify,80);break;}
+                  n=n.parentElement;
+                }
+              },true);
+              setTimeout(notify,0);
+            })();
+        """.trimIndent()
+        view?.evaluateJavascript(js, null)
+    }
+
+    private fun readCurrentView() {
+        web.evaluateJavascript(
+                "(function(){var e=document.querySelector('.view.is-active')||document.querySelector('[data-view].is-active');if(!e)return '';return e.id?e.id.replace(/^view-/,''):(e.getAttribute('data-view')||'');})()",
+                { value ->
+                    val v = value?.trim()?.trim('"').orEmpty()
+                    if (v.isNotEmpty()) updateBallLabel(v)
+                })
+    }
+
+    private fun updateBallLabel(view: String) {
+        val label = when (view) {
+            "browse" -> "浏览"
+            "send" -> "传文件"
+            "clip" -> "剪贴板"
+            "about" -> "我的"
+            else -> return
+        }
+        mainBallLabel.text = label
     }
 
     private fun buildPanel() {
@@ -209,8 +475,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
         sheet.apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20f), dp(18f), dp(20f), dp(18f))
-            setBackgroundColor(Theme.palette.panel)
-            background = rounded(Theme.palette.panel, Theme.palette.line, Radius.PANEL)
+            background = Glass.background(
+                    Glass.fill(), Glass.stroke(), dp(Glass.radius()).toFloat())
             setOnClickListener { }
         }
         val sheetLp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
@@ -219,6 +485,9 @@ class TransferPage(context: Context) : FrameLayout(context) {
         sheetLp.rightMargin = dp(12f)
         sheetLp.bottomMargin = dp(12f)
         panel.addView(sheet, sheetLp)
+        sheet.addView(View(context).apply {
+            setBackgroundColor(Glass.highlight())
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(0.5f)))
 
         sheet.addView(TextView(context).apply {
             text = "其他设备访问"
@@ -293,6 +562,14 @@ class TransferPage(context: Context) : FrameLayout(context) {
     }
 
     fun handleBack(): Boolean {
+        if (panelShown) {
+            hidePanel()
+            return true
+        }
+        if (ballsExpanded) {
+            collapseBalls()
+            return true
+        }
         if (web.canGoBack()) {
             web.goBack()
             return true
@@ -420,6 +697,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
 
     private fun showPanel() {
         if (panelShown) return
+        collapseBalls()
         panelShown = true
         updatePanelActions()
         panel.visibility = VISIBLE

@@ -68,7 +68,12 @@ class TabBar(context: Context) : View(context) {
         val top = 5f * d
         val bottom = height - 7f * d
 
+        val glassBg = RectF(0f, 0f, width.toFloat(), height.toFloat())
+        canvas.drawRoundRect(glassBg, Glass.radius() * d, Glass.radius() * d,
+                Draw.fill(Glass.fill()))
         canvas.drawLine(0f, 0.5f * d, width.toFloat(), 0.5f * d,
+                Draw.stroke(Glass.highlight(), 0.5f * d))
+        canvas.drawLine(0f, 1f * d, width.toFloat(), 1f * d,
                 Draw.stroke(p.line, 1f * d))
 
         // FileLens 风格：选中项底部一条短靛蓝指示条
