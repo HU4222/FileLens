@@ -46,7 +46,7 @@ class HttpServer(
     private var running = false
 
     // 配对状态（8 位：与桌面端一致，暴力空间 10^8）
-    @Volatile var pin = (10000000..99999999).random().toString()
+    @Volatile var pin = (100000..999999).random().toString()
     private val sessions = ConcurrentHashMap<String, Long>()
     private val challenges = ConcurrentHashMap<String, Long>()
     private data class LoginState(var fails: Int = 0, var lockedUntil: Long = 0L)

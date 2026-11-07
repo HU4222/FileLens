@@ -172,7 +172,9 @@ class TransferPage(context: Context) : FrameLayout(context) {
             textSize = 12f
             gravity = Gravity.CENTER
             setTextColor(Theme.palette.text2)
-            setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
+            setPadding(dp(10f), dp(6f), dp(10f), dp(6f))
+            background = rounded(Color.argb(15, 255, 255, 255),
+                    Theme.palette.line, Radius.PILL)
             setOnClickListener { openAbout() }
         }
         val qrLp = LinearLayout.LayoutParams(
@@ -289,6 +291,13 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 @JavascriptInterface
                 fun scanQr() {
                     handler.post { this@TransferPage.scanQr() }
+                }
+
+                @JavascriptInterface
+                fun lanUrl(): String {
+                    val ip = lanIp() ?: return ""
+                    val p = TransferService.port
+                    return if (p > 0) "http://$ip:$p" else ""
                 }
 
                 @JavascriptInterface
@@ -862,9 +871,12 @@ class TransferPage(context: Context) : FrameLayout(context) {
         if (!TransferService.running) return
         val js = """
             (function(){
-              var host='http://'+location.host;
+              var host='';
+              try{host=window.__dlNative&&window.__dlNative.lanUrl?window.__dlNative.lanUrl():'';}catch(e){}
               var pin='';
               try{pin=window.__dlNative&&window.__dlNative.pin?window.__dlNative.pin():'';}catch(e){}
+              var noWifi=!host;
+              var shown=noWifi?'未连接 Wi-Fi':host;
               var el=document.getElementById('dl-local-card');
               if(!el){
                 el=document.createElement('div'); el.id='dl-local-card'; el.className='card';
@@ -872,12 +884,28 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 if(body) body.insertBefore(el,body.firstChild);
               }
               el.innerHTML='<div class="card-title">本机连接信息</div>'+
-                '<div class="mono" style="font-size:15px;word-break:break-all">'+host+'</div>'+
+                '<div class="mono" style="font-size:15px;word-break:break-all">'+shown+'</div>'+
                 '<div style="margin-top:6px;color:#8b93a7">配对码 <b style="letter-spacing:2px">'+pin+'</b></div>'+
-                '<img src="/qr.png?text='+encodeURIComponent(host)+'" style="width:180px;height:180px;margin:10px auto;display:block;border-radius:8px">'+
-                '<button class="btn btn-primary" onclick="navigator.clipboard.writeText(\''+host+'\')">复制地址</button> '+
+                (noWifi?'':'<img src="/qr.png?text='+encodeURIComponent(host)+'" style="width:180px;height:180px;margin:10px auto;display:block;border-radius:8px">')+
+                '<button class="btn btn-primary" '+(noWifi?'disabled ':'')+'onclick="navigator.clipboard.writeText(\''+host+'\')">复制地址</button> '+
                 '<button class="btn" onclick="__dlNative.scanQr()">扫码连接</button> '+
                 '<button class="btn btn-danger" onclick="__dlNative.stopService()">停止服务</button>';
+              var body=document.getElementById('aboutBody');
+              if(body){
+                var hs=body.querySelectorAll('h3');
+                for(var i=0;i<hs.length;i++){
+                  if(/让对端连接|对端连接方式/.test(hs[i].textContent)){
+                    var sec=hs[i].closest('.card')||hs[i].parentElement;
+                    if(sec&&sec.id!=='dl-local-card') sec.remove();
+                    break;
+                  }
+                }
+              }
+              if(location.hostname==='127.0.0.1'||location.hostname==='localhost'){
+                var st=document.getElementById('dl-hide-local-download');
+                if(!st){st=document.createElement('style');st.id='dl-hide-local-download';document.head.appendChild(st);}
+                st.textContent='[data-act="download"]{display:none!important}';
+              }
             })();
         """.trimIndent()
         web.evaluateJavascript(js, null)
@@ -1194,7 +1222,13 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private fun lanIp(): String? {
         return try {
             val interfaces = NetworkInterface.getNetworkInterfaces()?.toList() ?: return null
-            for (nif in interfaces) {
+            for (nif in interfaces.sortedBy {
+                when {
+                    it.name == "wlan0" -> 0
+                    it.name.startsWith("wlan") -> 1
+                    else -> 2
+                }
+            }) {
                 if (!nif.isUp || nif.isLoopback) continue
                 for (addr in nif.inetAddresses.toList()) {
                     val ip = addr.hostAddress ?: continue
