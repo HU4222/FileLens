@@ -285,12 +285,7 @@ class MainActivity : Activity() {
         pager.onPageChanged = { onPageSettled(it) }
 
         overviewPage.onStartScan = { requestScan() }
-        overviewPage.onOpenTab = { idx ->
-            when (idx) {
-                1 -> showTreeOverlay()
-                2 -> toast("测速暂未开放")
-            }
-        }
+        overviewPage.onOpenTree = { showTreeOverlay() }
         overviewPage.onHealth = {
             selectTab(2, animate = true)
             cleanPage.onShown()
@@ -429,6 +424,9 @@ class MainActivity : Activity() {
         if (!::benchOverlay.isInitialized) return
         benchOverlay.visibility = View.VISIBLE
         benchOverlay.bringToFront()
+        benchOverlay.requestLayout()
+        benchPage.requestLayout()
+        benchPage.invalidate()
     }
 
     private fun hideBenchOverlay() {

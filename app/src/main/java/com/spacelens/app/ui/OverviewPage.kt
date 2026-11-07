@@ -24,7 +24,7 @@ import kotlin.math.min
 class OverviewPage(context: Context) : FrameLayout(context) {
 
     var onStartScan: (() -> Unit)? = null
-    var onOpenTab: ((Int) -> Unit)? = null
+    var onOpenTree: (() -> Unit)? = null
     var onHealth: (() -> Unit)? = null
     var onBench: (() -> Unit)? = null
 
@@ -523,8 +523,8 @@ class OverviewPage(context: Context) : FrameLayout(context) {
                     if (h >= 0 && h == was) {
                         when (h) {
                             0 -> onStartScan?.invoke()
-                            1 -> onOpenTab?.invoke(1)
-                            2 -> onOpenTab?.invoke(2)
+                            1 -> onOpenTree?.invoke()
+                            2 -> onBench?.invoke()
                             3 -> onHealth?.invoke()
                             4 -> onBench?.invoke()
                         }
