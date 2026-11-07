@@ -48,6 +48,7 @@ class HttpServer(
     // 配对状态（8 位：与桌面端一致，暴力空间 10^8）
     @Volatile var pin = (10000000..99999999).random().toString()
     private val sessions = ConcurrentHashMap<String, Long>()
+    private val challenges = ConcurrentHashMap<String, Long>()
     private data class LoginState(var fails: Int = 0, var lockedUntil: Long = 0L)
     private val loginStates = java.util.concurrent.ConcurrentHashMap<String, LoginState>()
     /** 正在发送的文件（供 /api/live 显示实时速率）。 */
@@ -206,8 +207,22 @@ class HttpServer(
                       isLocal: Boolean, localUi: Boolean, authed: Boolean, ip: String) {
 
         if (method == "GET") {
+            if (path == "/api/challenge") {
+                val nonce = java.util.UUID.randomUUID().toString().replace("-", "")
+                val now = System.currentTimeMillis()
+                challenges.entries.removeIf { now - it.value > 60_000L }
+                challenges[nonce] = now
+                return sendJson(out, JSONObject().put("nonce", nonce).put("ts", now))
+            }
             if (path == "/api/session") {
-                return sendJson(out, sessionJson(localUi, true))
+                if (!authed) return send(out, 401, "application/json; charset=utf-8",
+                    """{"ok":false,"error":"需要配对码","need_login":true}""".toByteArray())
+                return sendJson(out, sessionJson(localUi, authed))
+            }
+            if (!authed && path.startsWith("/api/") && path != "/api/login" &&
+                    path != "/api/ping" && path != "/api/icon") {
+                return send(out, 401, "application/json; charset=utf-8",
+                    """{"ok":false,"error":"需要配对码","need_login":true}""".toByteArray())
             }
             if (path == "/api/list") return sendJson(out, apiList(query["path"]))
             if (path == "/api/roots") return sendJson(out, apiRoots())
@@ -238,6 +253,10 @@ class HttpServer(
             when (path) {
                 "/api/login" -> return apiLogin(data, out, localUi, ip)
                 "/api/send" -> if (localUi) return apiSendStream(input, contentLength, query, out)
+            }
+            if (!authed) {
+                return send(out, 401, "application/json; charset=utf-8",
+                    """{"ok":false,"error":"需要配对码","need_login":true}""".toByteArray())
             }
             when (path) {
                 "/api/upload" -> return apiUploadStream(input, contentLength, out, query, localUi)
@@ -270,7 +289,7 @@ class HttpServer(
         val urls = localIps().map { "http://$it:$port" }
         val obj = JSONObject()
             .put("ok", true)
-            .put("authed", true)
+            .put("authed", authed)
             .put("local", localUi)
             .put("device", android.os.Build.MODEL)
             .put("platform", "android")
@@ -441,13 +460,59 @@ class HttpServer(
     }
 
     private fun apiLogin(data: JSONObject, out: OutputStream, localUi: Boolean, ip: String) {
-        // 个人版：保留路由兼容老前端，但恒成功，不再校验配对码。
+        val key = ip.ifBlank { "unknown" }
+        val state = loginStates.getOrPut(key) { LoginState() }
+        synchronized(state) {
+            val now = System.currentTimeMillis()
+            if (state.lockedUntil > now) {
+                val wait = ((state.lockedUntil - now) / 1000L).coerceAtLeast(1L)
+                return send(out, 429, "application/json; charset=utf-8",
+                    """{"ok":false,"error":"尝试次数过多，请 $wait 秒后再试","retry_after":$wait}""".toByteArray(),
+                    mapOf("Retry-After" to wait.toString()))
+            }
+            val nonce = data.optString("nonce")
+            val proof = data.optString("proof")
+            val issued = challenges.remove(nonce)
+            val valid = issued != null && now - issued <= 60_000L
+            val expected = if (valid) sha256Hex(pin + ":" + nonce) else ""
+            if (!valid || proof.isEmpty() || !constantTimeEquals(proof.lowercase(), expected)) {
+                state.fails++
+                if (state.fails >= 5) {
+                    state.fails = 0
+                    state.lockedUntil = now + 60_000L
+                    return send(out, 429, "application/json; charset=utf-8",
+                        """{"ok":false,"error":"尝试次数过多，请 60 秒后再试","retry_after":60}""".toByteArray(),
+                        mapOf("Retry-After" to "60"))
+                }
+                return send(out, 401, "application/json; charset=utf-8",
+                    """{"ok":false,"error":"配对码不对","need_login":true}""".toByteArray())
+            }
+            state.fails = 0
+            state.lockedUntil = 0L
+        }
+        val token = java.util.UUID.randomUUID().toString().replace("-", "")
+        sessions[token] = System.currentTimeMillis()
         if (!localUi) {
             val name = data.optString("name", "未知设备").take(40)
             peers[ip] = JSONObject().put("ts", System.currentTimeMillis()).put("name", name)
         }
-        sendJson(out, JSONObject().put("ok", true)
-                .put("device", android.os.Build.MODEL))
+        val cookie = "dlsess=$token; Path=/; Max-Age=2592000; HttpOnly; SameSite=Strict"
+        send(out, 200, "application/json; charset=utf-8",
+            """{"ok":true,"device":"${android.os.Build.MODEL}"}""".toByteArray(),
+            mapOf("Set-Cookie" to cookie))
+    }
+
+    private fun sha256Hex(text: String): String {
+        val bytes = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(text.toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun constantTimeEquals(a: String, b: String): Boolean {
+        if (a.length != b.length) return false
+        var diff = 0
+        for (i in a.indices) diff = diff or (a[i].code xor b[i].code)
+        return diff == 0
     }
 
     private fun apiClipAdd(data: JSONObject, out: OutputStream) {
@@ -771,7 +836,16 @@ class HttpServer(
         }
         if (rel == null) return send(out, 404, "text/plain; charset=utf-8", "Not Found".toByteArray())
         try {
-            val bytes = context.assets.open(rel).use { it.readBytes() }
+            var bytes = context.assets.open(rel).use { it.readBytes() }
+            if (rel.endsWith("index.html")) {
+                val html = String(bytes, Charsets.UTF_8)
+                val idx = html.lastIndexOf("</body>")
+                if (idx >= 0) {
+                    val injected = html.substring(0, idx) +
+                            "<script>" + pairingJs + "</script>" + html.substring(idx)
+                    bytes = injected.toByteArray(Charsets.UTF_8)
+                }
+            }
             val ctype = when {
                 rel.endsWith(".html") -> "text/html; charset=utf-8"
                 rel.endsWith(".js") -> "application/javascript; charset=utf-8"
@@ -938,6 +1012,47 @@ class HttpServer(
         send(out, 200, "application/json; charset=utf-8", obj.toString().toByteArray(),
             mapOf("Cache-Control" to "no-store, no-cache, must-revalidate", "Pragma" to "no-cache"))
     }
+
+    private val pairingJs: String = """
+        (function(){
+          if(window.__dlPairing)return; window.__dlPairing=true;
+          function sha256(ascii){
+            function rr(v,a){return (v>>>a)|(v<<(32-a));}
+            var max=Math.pow(2,32),result='',words=[],len=ascii.length*8;
+            var hash=sha256.h=sha256.h||[],k=sha256.k=sha256.k||[],pc=k.length,comp={};
+            for(var cand=2;pc<64;cand++){if(!comp[cand]){
+              for(var z=0;z<313;z+=cand)comp[z]=cand;
+              hash[pc]=(Math.pow(cand,.5)*max)|0;k[pc++]=(Math.pow(cand,1/3)*max)|0;}}
+            ascii+='\x80';while(ascii.length%64-56)ascii+='\x00';
+            for(var i=0;i<ascii.length;i++){var j=ascii.charCodeAt(i);if(j>>8)return '';
+              words[i>>2]|=j<<((3-i)%4)*8;}
+            words[words.length]=(len/max)|0;words[words.length]=len;
+            for(var j=0;j<words.length;){var w=words.slice(j,j+=16),old=hash;hash=hash.slice(0,8);
+              for(i=0;i<64;i++){var w15=w[i-15],w2=w[i-2],a=hash[0],e=hash[4];
+                var t1=hash[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&hash[5])^((~e)&hash[6]))+k[i]+
+                  (w[i]=i<16?w[i]:(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+
+                  (rr(w2,17)^rr(w2,19)^(w2>>>10)))|0);
+                var t2=(rr(a,2)^rr(a,13)^rr(a,22))+((a&hash[1])^(a&hash[2])^(hash[1]&hash[2]));
+                hash=[(t1+t2)|0].concat(hash);hash[4]=(hash[4]+t1)|0;}
+              for(i=0;i<8;i++)hash[i]=(hash[i]+old[i])|0;}
+            for(i=0;i<8;i++)for(j=3;j+1;j--){var b=(hash[i]>>(j*8))&255;result+=((b<16)?'0':'')+b.toString(16);}
+            return result;
+          }
+          function err(m){var e=document.getElementById('loginError');if(e)e.textContent=m;else alert(m);}
+          document.addEventListener('click',function(ev){
+            var b=ev.target.closest&&ev.target.closest('[data-act="login"]');if(!b)return;
+            ev.preventDefault();ev.stopPropagation();ev.stopImmediatePropagation();
+            var pin=document.getElementById('pinInput').value.trim();
+            if(!pin){err('请输入配对码');return;}
+            fetch('/api/challenge').then(function(r){return r.json();}).then(function(c){
+              var proof=sha256(pin+':'+c.nonce);
+              return fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({proof:proof,nonce:c.nonce})});
+            }).then(function(r){if(r.ok)location.reload();else r.json().then(function(d){err(d.error||'配对码不对');});})
+              .catch(function(){err('连接失败');});
+          },true);
+        })();
+    """.trimIndent()
 
     private fun send(out: OutputStream, code: Int, ctype: String, body: ByteArray, extra: Map<String, String> = emptyMap()) {
         try {

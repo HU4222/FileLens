@@ -824,6 +824,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
         val js = """
             (function(){
               var host='http://'+location.host;
+              var pin='';
+              try{pin=window.__dlNative&&window.__dlNative.pin?window.__dlNative.pin():'';}catch(e){}
               var el=document.getElementById('dl-local-card');
               if(!el){
                 el=document.createElement('div'); el.id='dl-local-card'; el.className='card';
@@ -832,11 +834,11 @@ class TransferPage(context: Context) : FrameLayout(context) {
               }
               el.innerHTML='<div class="card-title">本机连接信息</div>'+
                 '<div class="mono" style="font-size:15px;word-break:break-all">'+host+'</div>'+
+                '<div style="margin-top:6px;color:#8b93a7">配对码 <b style="letter-spacing:2px">'+pin+'</b></div>'+
                 '<img src="/qr.png?text='+encodeURIComponent(host)+'" style="width:180px;height:180px;margin:10px auto;display:block;border-radius:8px">'+
                 '<button class="btn btn-primary" onclick="navigator.clipboard.writeText(\''+host+'\')">复制地址</button> '+
                 '<button class="btn" onclick="__dlNative.scanQr()">扫码连接</button> '+
-                '<button class="btn btn-danger" onclick="__dlNative.stopService()">停止服务</button>'+
-                '<div style="margin-top:8px;color:#8b93a7;font-size:10px">个人模式 · 同一 Wi-Fi 下的设备无需密码即可访问</div>';
+                '<button class="btn btn-danger" onclick="__dlNative.stopService()">停止服务</button>';
             })();
         """.trimIndent()
         web.evaluateJavascript(js, null)
