@@ -18,10 +18,10 @@ object Glass {
     const val RADIUS_DP = 18f
 
     private val noisePaint: Paint by lazy {
-        val tile = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888)
-        for (y in 0 until 4) {
-            for (x in 0 until 4) {
-                tile.setPixel(x, y, if ((x + y) % 3 == 0) Color.WHITE else Color.TRANSPARENT)
+        val tile = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+        for (y in 0 until 2) {
+            for (x in 0 until 2) {
+                tile.setPixel(x, y, if ((x + y) % 2 == 0) Color.WHITE else Color.TRANSPARENT)
             }
         }
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -33,7 +33,7 @@ object Glass {
     fun radius(): Float = RADIUS_DP
 
     fun fill(dark: Boolean = Theme.palette.dark): Int =
-            if (dark) Color.argb(26, 255, 255, 255) else Color.argb(158, 255, 255, 255)
+            if (dark) Color.argb(36, 255, 255, 255) else Color.argb(158, 255, 255, 255)
 
     fun stroke(dark: Boolean = Theme.palette.dark): Int =
             if (dark) Color.argb(71, 255, 255, 255) else Color.argb(20, 15, 23, 42)
@@ -51,7 +51,7 @@ object Glass {
     ) {
         val fill = baseFill ?: fill(dark)
         val border = stroke(dark)
-        val topLight = if (dark) Color.argb(46, 255, 255, 255) else Color.argb(120, 255, 255, 255)
+        val topLight = if (dark) Color.argb(56, 255, 255, 255) else Color.argb(120, 255, 255, 255)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         paint.color = fill
         canvas.drawRoundRect(rect, radiusPx, radiusPx, paint)
@@ -60,20 +60,20 @@ object Glass {
         val clip = Path().apply { addRoundRect(rect, radiusPx, radiusPx, Path.Direction.CW) }
         canvas.clipPath(clip)
 
-        // 顶部 30% 高光带
-        val top = RectF(rect.left, rect.top, rect.right, rect.top + rect.height() * 0.30f)
+        // 顶部 40% 高光带
+        val top = RectF(rect.left, rect.top, rect.right, rect.top + rect.height() * 0.40f)
         val topPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(0f, top.top, 0f, top.bottom,
                     topLight, Color.TRANSPARENT, Shader.TileMode.CLAMP)
         }
         canvas.drawRect(top, topPaint)
 
-        // 底部 2dp 内阴影
-        val bottomH = max(1f, rect.height() * 0.03f)
+        // 底部 3dp 内阴影
+        val bottomH = max(1f, 3f * density)
         val bottom = RectF(rect.left, rect.bottom - bottomH, rect.right, rect.bottom)
         val bottomPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(0f, bottom.top, 0f, bottom.bottom,
-                    Color.TRANSPARENT, Color.argb(26, 0, 0, 0), Shader.TileMode.CLAMP)
+                    Color.TRANSPARENT, Color.argb(36, 0, 0, 0), Shader.TileMode.CLAMP)
         }
         canvas.drawRect(bottom, bottomPaint)
         canvas.drawRect(rect, noisePaint)

@@ -114,7 +114,7 @@ class MainActivity : Activity() {
             "存储总览 · 空间树",
             "只搜内存索引 · 不重扫磁盘",
             "重复文件 · 删除进回收站",
-            "局域网互传占位",
+            "本机文件互传",
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -52,7 +52,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
     companion object {
         const val REQ_FILE = 5010
         private const val TABBAR_H_DP = 80f
-        private const val BALL_BOTTOM_SCREEN_DP = 96f
+        private const val BALL_BOTTOM_SCREEN_DP = 116f
         // 1.2.0 起 pager 延伸到屏幕底，胶囊悬浮在上面；球位置直接用屏幕坐标。
         private const val BALL_BOTTOM_DP = BALL_BOTTOM_SCREEN_DP
         private const val LABEL_H_DP = 14f
@@ -103,6 +103,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private var ballDownY = 0f
     private val satViews = arrayOf("browse", "send", "clip", "about")
     private val satNames = arrayOf("浏览", "传文件", "剪贴板", "我的")
+    private val satIcons = arrayOf(Icon.FOLDER, Icon.SPEED, Icon.LIST, Icon.USER)
     private val prefs = context.getSharedPreferences("filelens_transfer", Context.MODE_PRIVATE)
 
     init {
@@ -306,7 +307,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
         addView(scrim, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
         for (i in satViews.indices) {
-            val ball = makeBall(SAT_BALL_DP.toInt(), Glass.fill(), 10f, satNames[i])
+            val ball = makeBall(SAT_BALL_DP.toInt(), Glass.fill(), 10f, satNames[i], satIcons[i])
             val ballLp = LayoutParams(dp(SAT_BALL_DP), dp(SAT_BALL_DP), Gravity.BOTTOM or Gravity.RIGHT)
             ballLp.rightMargin = dp(MAIN_RIGHT_DP)
             ballLp.bottomMargin = dp(SAT_FIRST_BOTTOM_DP + i * SAT_STEP_DP)
@@ -356,16 +357,31 @@ class TransferPage(context: Context) : FrameLayout(context) {
         addView(mainBall, mainLp)
     }
 
-    private fun makeBall(size: Int, fill: Int, textSize: Float, text: String): FrameLayout {
+    private fun makeBall(
+            size: Int,
+            fill: Int,
+            textSize: Float,
+            text: String,
+            icon: Icon? = null,
+    ): FrameLayout {
         val root = FrameLayout(context)
         root.addView(glassBackground(fill, size / 2f),
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        root.addView(TextView(context).apply {
-            this.text = text
-            this.textSize = textSize
-            gravity = Gravity.CENTER
-            setTextColor(Theme.palette.text)
-        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        if (icon != null) {
+            root.addView(object : View(context) {
+                override fun onDraw(canvas: Canvas) {
+                    Draw.icon(canvas, icon, width / 2f, height / 2f,
+                            dp(22f).toFloat(), Theme.palette.text2, 2f * resources.displayMetrics.density)
+                }
+            }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        } else {
+            root.addView(TextView(context).apply {
+                this.text = text
+                this.textSize = textSize
+                gravity = Gravity.CENTER
+                setTextColor(Theme.palette.text)
+            }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        }
         root.isClickable = true
         return root
     }
@@ -527,7 +543,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
             (function(){
               if(document.getElementById('dl-embed-style'))return;
               var s=document.createElement('style');s.id='dl-embed-style';
-              s.textContent='.nav{display:none!important}';
+              s.textContent='.nav{display:none!important}.topbar{display:none!important}.views{padding-top:8px!important}';
               document.head.appendChild(s);
             })();
         """.trimIndent()
