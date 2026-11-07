@@ -178,7 +178,7 @@ class DetailPane(context: Context) : View(context) {
         y += 6f * d
 
         val pathCard = RectF(padding, y, w - padding, y + 64f * d)
-        Draw.card(canvas, pathCard, 12f * d, p.panel, p.line)
+        Draw.card(canvas, pathCard, Radius.SM * d, p.panel, p.line)
         val pl = Draw.text(context, 9f, p.muted)
         canvas.drawText("完整路径", pathCard.left + 10f * d, pathCard.top + 16f * d, pl)
         val pp = Draw.text(context, 9.5f, p.text2)

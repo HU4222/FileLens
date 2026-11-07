@@ -9,11 +9,11 @@ import android.graphics.Shader
 import android.view.View
 import android.view.ViewGroup
 
-/** 启动标识：420ms，缩放 0.86→1 + 淡入，结束后自移除。 */
+/** 启动标识：280ms 淡入，结束后自移除；不做回弹/缩放。 */
 class SplashView(context: Context) : View(context) {
 
     private var alpha = 0f
-    private var scale = 0.86f
+    private val scale = 1f
     private var loggedDraw = false
     var onDone: (() -> Unit)? = null
 
@@ -25,9 +25,8 @@ class SplashView(context: Context) : View(context) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         post {
-            Motion.tween(420, Ease::outCubic, { t ->
+            Motion.tween(MotionDurations.PAGE, Ease::softOut, { t ->
                 alpha = t
-                scale = 0.86f + 0.14f * t
                 invalidate()
             }, {
                 (parent as? ViewGroup)?.removeView(this)

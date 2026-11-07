@@ -49,35 +49,42 @@ data class Palette(
     fun colorFor(index: Int): Int = category[index % category.size]
 }
 
+/** DropLink 视觉圆角（dp）。卡片/列表/按钮只从这里取，不散落魔法数字。 */
+object Radius {
+    const val PANEL = 18f
+    const val SM = 12f
+    const val PILL = 999f
+}
+
 object Theme {
 
     val LIGHT = Palette(
             dark = false,
-            bg = 0xFFF2F3F5.toInt(),
+            bg = 0xFFF3F5FB.toInt(),
             panel = 0xFFFFFFFF.toInt(),
-            panelSoft = 0xFFF7F8F9.toInt(),
-            panelSunken = 0xFFECEEF0.toInt(),
-            text = 0xFF121416.toInt(),
-            text2 = 0xFF4B5157.toInt(),
-            muted = 0xFF8A9096.toInt(),
-            line = 0xFFE4E6E8.toInt(),
-            lineStrong = 0xFFD8DBDE.toInt(),
-            brand = 0xFF0FA98E.toInt(),
-            brand2 = 0xFF4EE1C1.toInt(),
-            brandSoft = 0xFFD9F7F1.toInt(),
-            danger = 0xFFD94A5A.toInt(),
-            ok = 0xFF78D800.toInt(),
-            warn = 0xFFF0A818.toInt(),
-            bgGlow = 0xFFE6F7F4.toInt(),
-            scrim = 0x55000000,
+            panelSoft = 0xFFF7F9FD.toInt(),
+            panelSunken = 0xFFEEF1F8.toInt(),
+            text = 0xFF0F172A.toInt(),
+            text2 = 0xFF334155.toInt(),
+            muted = 0xFF8B97AD.toInt(),
+            line = 0xFFE7EBF4.toInt(),
+            lineStrong = 0xFFD9E0EE.toInt(),
+            brand = 0xFF4F46E5.toInt(),
+            brand2 = 0xFF7C3AED.toInt(),
+            brandSoft = 0xFFEEF0FF.toInt(),
+            danger = 0xFFE11D48.toInt(),
+            ok = 0xFF10B981.toInt(),
+            warn = 0xFFF59E0B.toInt(),
+            bgGlow = 0xFFE9EDFF.toInt(),
+            scrim = 0x660F172A,
             category = intArrayOf(
-                    0xFFF0A818.toInt(), // 图片
-                    0xFFD94A5A.toInt(), // 视频
-                    0xFF9030D8.toInt(), // 音频
-                    0xFF4890F0.toInt(), // 文档
-                    0xFF78D800.toInt(), // 安装包
-                    0xFF22C9B8.toInt(), // 压缩包
-                    0xFF6B7076.toInt(), // 其他
+                    0xFFF59E0B.toInt(), // 图片
+                    0xFFE11D48.toInt(), // 视频
+                    0xFF8B5CF6.toInt(), // 音频
+                    0xFF3B82F6.toInt(), // 文档
+                    0xFF10B981.toInt(), // 安装包
+                    0xFF0EA5E9.toInt(), // 压缩包
+                    0xFF8B97AD.toInt(), // 其他
             ),
     )
 
@@ -90,31 +97,31 @@ object Theme {
 
     val DARK = Palette(
             dark = true,
-            bg = 0xFF121416.toInt(),
-            panel = 0xFF1E2125.toInt(),
-            panelSoft = 0xFF262A2F.toInt(),
-            panelSunken = 0xFF16181B.toInt(),
-            text = 0xFFE6E8EA.toInt(),
-            text2 = 0xFF9AA0A6.toInt(),
-            muted = 0xFF6B7076.toInt(),
-            line = 0x0FFFFFFF,
-            lineStrong = 0xFF2A2E33.toInt(),
-            brand = 0xFF4EE1C1.toInt(),
-            brand2 = 0xFF7CF0D8.toInt(),
-            brandSoft = 0xFF173E38.toInt(),
-            danger = 0xFFD94A5A.toInt(),
-            ok = 0xFF78D800.toInt(),
-            warn = 0xFFF0A818.toInt(),
-            bgGlow = 0xFF142B27.toInt(),
-            scrim = 0x99000000.toInt(),
+            bg = 0xFF0B1020.toInt(),
+            panel = 0xFF141A2E.toInt(),
+            panelSoft = 0xFF19203A.toInt(),
+            panelSunken = 0xFF101627.toInt(),
+            text = 0xFFEEF2FF.toInt(),
+            text2 = 0xFFB9C2DA.toInt(),
+            muted = 0xFF7F8AA6.toInt(),
+            line = 0xFF232B45.toInt(),
+            lineStrong = 0xFF2F395A.toInt(),
+            brand = 0xFF8B87FF.toInt(),
+            brand2 = 0xFFB18CFF.toInt(),
+            brandSoft = 0xFF1E2450.toInt(),
+            danger = 0xFFFF6B8A.toInt(),
+            ok = 0xFF10B981.toInt(),
+            warn = 0xFFF59E0B.toInt(),
+            bgGlow = 0xFF111832.toInt(),
+            scrim = 0x990B1020.toInt(),
             category = intArrayOf(
-                    0xFFF0A818.toInt(),
-                    0xFFD94A5A.toInt(),
-                    0xFF9030D8.toInt(),
-                    0xFF4890F0.toInt(),
-                    0xFF78D800.toInt(),
-                    0xFF22C9B8.toInt(),
-                    0xFF6B7076.toInt(),
+                    0xFFFBBF24.toInt(),
+                    0xFFFF6B8A.toInt(),
+                    0xFFB18CFF.toInt(),
+                    0xFF60A5FA.toInt(),
+                    0xFF34D399.toInt(),
+                    0xFF38BDF8.toInt(),
+                    0xFF7F8AA6.toInt(),
             ),
     )
     @Volatile

@@ -18,7 +18,6 @@ object Draw {
 
     val SANS: Typeface = Typeface.create("sans-serif", Typeface.NORMAL)
     val SANS_MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-    val SANS_BOLD: Typeface = Typeface.create("sans-serif", Typeface.BOLD)
 
     fun dp(context: Context, v: Float): Float = v * context.resources.displayMetrics.density
     fun sp(context: Context, v: Float): Float = v * context.resources.displayMetrics.scaledDensity
@@ -65,7 +64,22 @@ object Draw {
         canvas.drawText(text, x, baseline, paint)
     }
 
-    fun card(canvas: Canvas, rect: RectF, radius: Float, fillColor: Int, lineColor: Int, lineWidth: Float = 1f) {
+    fun softShadow(canvas: Canvas, rect: RectF, radius: Float, d: Float) {
+        val p = Theme.palette
+        val base = if (p.dark) 0xFF000000.toInt() else 0xFF0F172A.toInt()
+        val layers = if (p.dark) 4 else 3
+        for (i in layers downTo 1) {
+            val grow = i * 1.4f * d
+            val r = RectF(rect.left - grow, rect.top - grow + 1.5f * d,
+                    rect.right + grow, rect.bottom + grow + 2.2f * d)
+            canvas.drawRoundRect(r, radius + grow, radius + grow,
+                    fill(Theme.alpha(base, if (p.dark) 16 else 5)))
+        }
+    }
+
+    fun card(canvas: Canvas, rect: RectF, radius: Float, fillColor: Int, lineColor: Int,
+             lineWidth: Float = 1f, shadow: Boolean = false) {
+        if (shadow) softShadow(canvas, rect, radius, 1f)
         val fill = fill(fillColor)
         canvas.drawRoundRect(rect, radius, radius, fill)
         if (lineWidth > 0f) {

@@ -677,8 +677,8 @@ class TreemapView(context: Context) : View(context) {
     private fun drawRipples(canvas: Canvas, p: Palette, d: Float) {
         val now = SystemClock.uptimeMillis()
         for (r in ripples) {
-            val t = ((now - r.startMs) / 380f).coerceIn(0f, 1f)
-            val radius = (8f + 80f * Ease.outCubic(t)) * d
+            val t = ((now - r.startMs) / MotionDurations.PAGE.toFloat()).coerceIn(0f, 1f)
+            val radius = (8f + 80f * Ease.softOut(t)) * d
             ripplePaint.color = Theme.alpha(p.brand, ((1f - t) * 0.18f * 255f).toInt())
             ripplePaint.strokeWidth = 1.5f * d
             canvas.drawCircle(r.cx, r.cy, radius, ripplePaint)

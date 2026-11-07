@@ -65,7 +65,12 @@ class SearchPage(context: Context) : LinearLayout(context) {
             setTextColor(Theme.palette.text)
             setHintTextColor(Theme.palette.muted)
             setPadding(dp(14f), dp(10f), dp(14f), dp(10f))
-            background = rounded(Theme.palette.panelSunken, Theme.palette.line, 14f)
+            background = rounded(Theme.palette.panelSoft, Theme.palette.line, Radius.SM, 1f)
+            setOnFocusChangeListener { _, focused ->
+                background = rounded(Theme.palette.panelSoft,
+                        if (focused) Theme.palette.brand else Theme.palette.line,
+                        Radius.SM, if (focused) 1.5f else 1f)
+            }
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
@@ -87,7 +92,8 @@ class SearchPage(context: Context) : LinearLayout(context) {
         addView(scroller, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         status.apply {
-            textSize = 11.5f
+            textSize = 13f
+            gravity = Gravity.CENTER
             setTextColor(Theme.palette.muted)
             setPadding(dp(4f), dp(8f), dp(4f), dp(6f))
         }
@@ -177,7 +183,7 @@ class SearchPage(context: Context) : LinearLayout(context) {
             setPadding(dp(11f), dp(6f), dp(11f), dp(6f))
             setTextColor(if (active) Color.WHITE else Theme.palette.text2)
             background = rounded(if (active) Theme.palette.brand else Theme.palette.panelSunken,
-                    if (active) Theme.palette.brand else Theme.palette.line, 12f)
+                    if (active) Theme.palette.brand else Theme.palette.line, Radius.SM, 1f)
             setOnClickListener { click() }
         }
         val lp = LayoutParams(LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -287,8 +293,9 @@ class SearchPage(context: Context) : LinearLayout(context) {
             val hit = hits.getOrNull(position) ?: return View(context)
             val row = LinearLayout(context).apply {
                 orientation = VERTICAL
-                setPadding(dp(10f), dp(10f), dp(10f), dp(10f))
-                background = rounded(Theme.palette.panel, Theme.palette.line, 12f)
+                minimumHeight = dp(56f)
+                setPadding(dp(12f), dp(9f), dp(12f), dp(9f))
+                background = rounded(Theme.palette.panel, Theme.palette.line, Radius.SM, 1f)
             }
             row.addView(TextView(context).apply {
                 text = hit.name
@@ -307,16 +314,25 @@ class SearchPage(context: Context) : LinearLayout(context) {
             })
             val lp = AbsListView.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
             row.layoutParams = lp
-            row.setPadding(dp(10f), dp(10f), dp(10f), dp(10f))
+            if (position < 8) {
+                row.alpha = 0f
+                row.translationY = dp(6f).toFloat()
+                row.postDelayed({
+                    Motion.tween(MotionDurations.ITEM, Ease::softOut, { t ->
+                        row.alpha = t
+                        row.translationY = (1f - t) * dp(6f).toFloat()
+                    })
+                }, position * 20L)
+            }
             return row
         }
     }
 
-    private fun rounded(fill: Int, stroke: Int, radius: Float): GradientDrawable =
+    private fun rounded(fill: Int, stroke: Int, radius: Float, strokeWidth: Float = 1f): GradientDrawable =
             GradientDrawable().apply {
                 cornerRadius = dp(radius).toFloat()
                 setColor(fill)
-                setStroke(max(1, dp(1f)), stroke)
+                setStroke(max(1, dp(strokeWidth)), stroke)
             }
 
     private fun dp(v: Float): Int = (v * resources.displayMetrics.density).toInt()

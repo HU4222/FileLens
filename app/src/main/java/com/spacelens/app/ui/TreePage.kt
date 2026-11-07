@@ -230,7 +230,7 @@ class TreePage(context: Context) : FrameLayout(context) {
                 row.removeAllViews()
                 val isSel = selectionActive && selectedNodes.contains(item.index)
                 row.background = android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = 32 * resources.displayMetrics.density
+                    cornerRadius = Radius.SM * resources.displayMetrics.density
                     setColor(if (isSel) p.panelSoft else p.panel)
                 }
                 val content = android.widget.LinearLayout(context).apply {
@@ -425,7 +425,7 @@ class TreePage(context: Context) : FrameLayout(context) {
             val w = width.toFloat()
             var y = 8f * d
             val root = RectF(margin, y, w - margin, y + rootH)
-            Draw.card(canvas, root, 16f * d, p.panel, p.line)
+            Draw.card(canvas, root, Radius.PANEL * d, p.panel, p.line, shadow = true)
 
             val s = store
             val drilled = s != null && rootIndex != 0
@@ -442,7 +442,7 @@ class TreePage(context: Context) : FrameLayout(context) {
             }
 
             val nameX = root.left + if (drilled) 50f * d else 55f * d
-            val namePaint = Draw.text(context, 13f, p.text, medium = true)
+            val namePaint = Draw.text(context, 15f, p.text, medium = true)
             val displayName = if (s != null && rootIndex in 0 until s.count) s.nameOf(rootIndex) else rootName
             val compact = root.width() < 340f * d
             val scanW = if (compact) 44f * d else 78f * d
@@ -450,7 +450,7 @@ class TreePage(context: Context) : FrameLayout(context) {
             canvas.drawText(Draw.ellipsize(displayName, namePaint, textMax),
                     nameX, root.centerY() + 1.5f * d, namePaint)
 
-            val statPaint = Draw.text(context, 9.5f, p.muted)
+            val statPaint = Draw.text(context, 11f, p.muted)
             val stat = when {
                 scanning -> progress?.let {
                     "扫描中 · ${Fmt.count(it.files.toLong())} 文件 · ${Fmt.bytes(it.bytes)}"
@@ -478,7 +478,7 @@ class TreePage(context: Context) : FrameLayout(context) {
                             16f * d, 0xFFFFFFFF.toInt(), 1.8f * d)
                 }
             } else {
-                canvas.drawRoundRect(scanRect, 16f * d, 16f * d,
+                canvas.drawRoundRect(scanRect, scanRect.height() / 2f, scanRect.height() / 2f,
                         Draw.fill(if (scanning) Theme.alpha(p.danger, 32) else p.brand))
                 val sp = Draw.text(context, 10.5f,
                         if (scanning) p.danger else 0xFFFFFFFF.toInt(), medium = true, align = Paint.Align.CENTER)
@@ -533,7 +533,7 @@ class TreePage(context: Context) : FrameLayout(context) {
                 val r = RectF(cx, y + 1f * d, cx + 64f * d, y + chipH - 1f * d)
                 chipRects[i].set(r)
                 val active = i == viewMode && i < 3
-                canvas.drawRoundRect(r, 15f * d, 15f * d,
+                canvas.drawRoundRect(r, Radius.SM * d, Radius.SM * d,
                         Draw.fill(if (active) p.brandSoft else p.panelSunken))
                 Draw.icon(canvas, icons[i], r.left + 16f * d, r.centerY(), 13f * d,
                         if (active) p.brand else p.muted, 1.6f * d)

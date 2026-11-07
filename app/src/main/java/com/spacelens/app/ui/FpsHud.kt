@@ -94,7 +94,7 @@ class FpsHudView(context: Context) : View(context) {
         val p = Theme.palette
         val d = resources.displayMetrics.density
         panel.set(0f, 0f, width.toFloat(), height.toFloat())
-        Draw.card(canvas, panel, 14f * d, Theme.alpha(p.panel, 238), p.line)
+        Draw.card(canvas, panel, Radius.SM * d, Theme.alpha(p.panel, 238), p.line)
         val refreshHz = readRefreshRate(context)
         val hzText = if (refreshHz >= 100f) "${refreshHz.toInt()}Hz" else "当前 ${refreshHz.toInt()}Hz"
         val title = Draw.text(context, 18f, p.text, medium = true)

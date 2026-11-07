@@ -76,7 +76,7 @@ class BenchPage(context: Context) : FrameLayout(context) {
 
             // 仪表盘
             val gauge = RectF(margin, y, w - margin, y + gaugeH)
-            Draw.card(canvas, gauge, 18f * d, p.panel, p.line)
+            Draw.card(canvas, gauge, Radius.PANEL * d, p.panel, p.line)
             drawGauge(canvas, gauge, p)
             y = gauge.bottom + 14f * d
 
@@ -97,7 +97,7 @@ class BenchPage(context: Context) : FrameLayout(context) {
                 val left = margin + col * (cw + gap)
                 val top = y + row * (cardH + gap)
                 val rect = RectF(left, top, left + cw, top + cardH)
-                Draw.card(canvas, rect, 16f * d, p.panel, p.line)
+                Draw.card(canvas, rect, Radius.PANEL * d, p.panel, p.line)
                 val lp = Draw.text(context, 10.5f, p.muted)
                 canvas.drawText(labels[i], rect.left + 14f * d, rect.top + 24f * d, lp)
                 val r = result

@@ -52,14 +52,15 @@ class CleanPage(context: Context) : LinearLayout(context) {
 
         summary.apply {
             text = "重复文件"
-            textSize = 17f
+            textSize = 18f
+            typeface = Draw.SANS_MEDIUM
             setTextColor(Theme.palette.text)
         }
         addView(summary, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         status.apply {
             text = "同 size 且 ≥1MB 的文件才会做 SHA-256；可中断。"
-            textSize = 11f
+            textSize = 13f
             setTextColor(Theme.palette.muted)
             setPadding(0, dp(5f), 0, dp(6f))
         }
@@ -67,6 +68,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
 
         progress.max = 100
         progress.progress = 0
+        progress.progressTintList = android.content.res.ColorStateList.valueOf(Theme.palette.brand)
         progress.visibility = View.GONE
         addView(progress, LayoutParams(LayoutParams.MATCH_PARENT, dp(4f)))
 
@@ -77,9 +79,13 @@ class CleanPage(context: Context) : LinearLayout(context) {
         }
         start.text = "开始检查"
         start.textSize = 12f
+        start.setTextColor(Color.WHITE)
+        start.background = rounded(Theme.palette.brand, Theme.palette.brand, Radius.PILL)
         start.setOnClickListener { startScan() }
         cancel.text = "取消"
         cancel.textSize = 12f
+        cancel.setTextColor(Theme.palette.brand)
+        cancel.background = rounded(Theme.palette.brandSoft, Theme.palette.brandSoft, Radius.PILL)
         cancel.visibility = View.GONE
         cancel.setOnClickListener {
             cancelFlag = true
@@ -101,9 +107,9 @@ class CleanPage(context: Context) : LinearLayout(context) {
 
         delete.apply {
             text = "删除选中（进回收站）"
-            textSize = 12.5f
+            textSize = 13f
             setTextColor(Color.WHITE)
-            background = rounded(Theme.palette.brand, Theme.palette.brand, 12f)
+            background = rounded(Theme.palette.danger, Theme.palette.danger, Radius.PILL)
             setOnClickListener { confirmDelete() }
         }
         val dlp = LayoutParams(LayoutParams.MATCH_PARENT, dp(42f))
@@ -207,16 +213,17 @@ class CleanPage(context: Context) : LinearLayout(context) {
         for ((gi, group) in groups.withIndex()) {
             val header = TextView(context).apply {
                 text = "第 ${gi + 1} 组 · ${Fmt.bytes(group.size)} × ${group.files.size} 份 · 可释放 ${Fmt.bytes(group.reclaim)}"
-                textSize = 11.5f
-                setTextColor(Theme.palette.text2)
+                textSize = 15f
+                typeface = Draw.SANS_MEDIUM
+                setTextColor(Theme.palette.text)
                 setPadding(dp(4f), dp(10f), dp(4f), dp(4f))
             }
             body.addView(header, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
             for ((fi, file) in group.files.withIndex()) {
                 val row = LinearLayout(context).apply {
                     orientation = VERTICAL
-                    setPadding(dp(8f), dp(7f), dp(8f), dp(7f))
-                    background = rounded(Theme.palette.panel, Theme.palette.line, 10f)
+                    setPadding(dp(10f), dp(8f), dp(10f), dp(8f))
+                    background = rounded(Theme.palette.panel, Theme.palette.line, Radius.SM)
                 }
                 if (fi == 0) {
                     row.addView(TextView(context).apply {
@@ -256,7 +263,14 @@ class CleanPage(context: Context) : LinearLayout(context) {
 
     private fun updateSummary() {
         val reclaim = groups.sumOf { it.reclaim }
-        summary.text = "重复文件 · ${groups.size} 组 · 可释放 ${Fmt.bytes(reclaim)}"
+        val text = "重复文件 · ${groups.size} 组 · 可释放 ${Fmt.bytes(reclaim)}"
+        val span = android.text.SpannableString(text)
+        val at = text.indexOf("可释放")
+        if (at >= 0) {
+            span.setSpan(android.text.style.ForegroundColorSpan(Theme.palette.ok),
+                    at, text.length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        summary.text = span
         delete.isEnabled = selected.isNotEmpty() && !running
     }
 

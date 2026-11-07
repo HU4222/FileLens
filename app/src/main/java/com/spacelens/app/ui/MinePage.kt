@@ -99,7 +99,7 @@ class MinePage(context: Context) : FrameLayout(context) {
 
             // 头部
             val head = RectF(margin, y, w - margin, y + headerH)
-            Draw.card(canvas, head, 18f * d, p.panel, p.line)
+            Draw.card(canvas, head, Radius.PANEL * d, p.panel, p.line)
             val mark = RectF(head.left + 18f * d, head.centerY() - 23f * d,
                     head.left + 64f * d, head.centerY() + 23f * d)
             val grad = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -159,7 +159,7 @@ class MinePage(context: Context) : FrameLayout(context) {
             canvas.drawText(title, margin + 2f * d, top + 13f * d, head)
             var y = top + sectionHead
             val card = RectF(margin, y, w - margin, y + rowH * rows.size)
-            Draw.card(canvas, card, 18f * d, p.panel, p.line)
+            Draw.card(canvas, card, Radius.PANEL * d, p.panel, p.line)
             for (i in rows.indices) {
                 val (icon, label, action) = rows[i]
                 val rowTop = y + i * rowH

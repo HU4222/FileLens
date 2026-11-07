@@ -40,7 +40,7 @@ class SelectionBar(context: Context) : View(context) {
         val d = resources.displayMetrics.density
         val rect = RectF(Draw.dp(context, 18f), Draw.dp(context, 4f),
                 width - Draw.dp(context, 18f), height - Draw.dp(context, 4f))
-        Draw.card(canvas, rect, 12f * d, p.brandSoft, p.line)
+        Draw.card(canvas, rect, Radius.SM * d, p.brandSoft, p.line)
         canvas.drawCircle(rect.left + 18f * d, rect.centerY(), 5f * d, Draw.fill(p.brand))
         val tp = Draw.text(context, 11f, p.text2, medium = true)
         canvas.drawText("已选 $count 项", rect.left + 32f * d, rect.centerY() + 4f * d, tp)

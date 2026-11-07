@@ -13,12 +13,38 @@ object Ease {
     fun inOutCubic(t: Float): Float =
             if (t < 0.5f) 4f * t * t * t else 1f - (-2f * t + 2f).let { it * it * it } / 2f
     fun outExpo(t: Float): Float = if (t >= 1f) 1f else 1f - exp((-10f * t)).toFloat()
-    fun outBack(t: Float): Float {
-        val c1 = 1.70158f
-        val c3 = c1 + 1f
-        val u = t - 1f
-        return 1f + c3 * u * u * u + c1 * u * u
+
+    /**
+     * DropLink 曲线：cubic-bezier(0.22, 0.9, 0.3, 1)。
+     * 三次贝塞尔求值，不用 outCubic 近似。
+     */
+    fun softOut(t: Float): Float {
+        val x = t.coerceIn(0f, 1f)
+        if (x <= 0f) return 0f
+        if (x >= 1f) return 1f
+        var lo = 0f
+        var hi = 1f
+        repeat(12) {
+            val mid = (lo + hi) / 2f
+            if (bezier(mid, 0.22f, 0.3f) < x) lo = mid else hi = mid
+        }
+        return bezier((lo + hi) / 2f, 0.9f, 1f)
     }
+
+    private fun bezier(t: Float, p1: Float, p2: Float): Float {
+        val u = 1f - t
+        return 3f * u * u * t * p1 + 3f * u * t * t * p2 + t * t * t
+    }
+}
+
+/** 动效时长（ms）：只允许在这里出现，页面/控件不散落时长。 */
+object MotionDurations {
+    const val PAGE = 280
+    const val ITEM = 200
+    const val SHEET = 220
+    const val FADE = 160
+    const val PRESS = 130
+    const val INDICATOR = 180
 }
 
 /**
@@ -79,6 +105,8 @@ object FrameStats {
 object Motion {
 
     @Volatile var powerSave = false
+
+    fun softOut(t: Float): Float = Ease.softOut(t)
 
     // v1.2.0 统一弹簧参数：全站只在这里出现
     const val PAGE_STIFFNESS = 380f
@@ -163,7 +191,7 @@ object Motion {
 
     fun tween(
             durationMs: Int,
-            easing: (Float) -> Float = Ease::outCubic,
+            easing: (Float) -> Float = Ease::softOut,
             update: (Float) -> Unit,
             end: (() -> Unit)? = null,
     ): Animation {

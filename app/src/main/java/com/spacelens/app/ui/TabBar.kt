@@ -76,11 +76,12 @@ class TabBar(context: Context) : View(context) {
 
     private fun springTo(target: Float) {
         springAnim?.cancel()
-        springAnim = Motion.indicatorSpring(
-                from = progress,
-                to = target,
+        val start = progress
+        springAnim = Motion.tween(
+                MotionDurations.INDICATOR,
+                Ease::softOut,
                 update = {
-                    progress = it
+                    progress = start + (target - start) * it
                     postInvalidateOnAnimation()
                 },
         )
@@ -90,17 +91,19 @@ class TabBar(context: Context) : View(context) {
         if (width == 0) return
         val p = Theme.palette
         val d = resources.displayMetrics.density
-        val pad = 14f * d
         val top = 5f * d
         val bottom = height - 7f * d
-        val radius = (bottom - top) / 2f
 
-        // 2.0 §2.4：底部栏不画底槽，只留图标与文字
+        canvas.drawLine(0f, 0.5f * d, width.toFloat(), 0.5f * d,
+                Draw.stroke(p.line, 1f * d))
 
+        // DropLink 风格：选中项底部一条短靛蓝指示条
         val iw = itemWidth()
-        val indLeft = contentLeft() + progress * iw + 5f * d
-        val ind = RectF(indLeft, top + 5f * d, indLeft + iw - 10f * d, bottom - 5f * d)
-        // 选中态只由图标/文字颜色表达，不再画胶囊指示块
+        val indW = 18f * d
+        val indLeft = contentLeft() + progress * iw + (iw - indW) / 2f
+        val indTop = height - 5f * d
+        canvas.drawRoundRect(RectF(indLeft, indTop, indLeft + indW, indTop + 3f * d),
+                1.5f * d, 1.5f * d, Draw.fill(p.brand))
 
         for (i in labels.indices) {
             val cx = contentLeft() + iw * (i + 0.5f)

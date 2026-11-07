@@ -130,7 +130,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
     private fun animateRing() {
         anim?.cancel()
         val target = if (totalBytes > 0) (totalBytes - freeBytes).toFloat() / totalBytes else 0f
-        anim = Motion.tween(700, Ease::outCubic, { t ->
+        anim = Motion.tween(MotionDurations.PAGE, Ease::softOut, { t ->
             ringAnim = t
             ringSweep = target * t
             content.invalidate()
@@ -143,7 +143,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
         valueAnim?.cancel()
         val from = animatedUsed
         if (from == target) return
-        valueAnim = Motion.tween(600, Ease::outExpo, { t ->
+        valueAnim = Motion.tween(MotionDurations.PAGE, Ease::softOut, { t ->
             animatedUsed = (from + (target - from) * t).toLong()
             content.invalidate()
         }, { animatedUsed = target })
@@ -215,8 +215,9 @@ class OverviewPage(context: Context) : FrameLayout(context) {
         }
 
         private fun drawHero(canvas: Canvas, r: RectF, p: Palette) {
-            canvas.drawRoundRect(r, 20f * d, 20f * d, Draw.fill(p.panel))
-            val label = Draw.text(context, 13f, p.text2, medium = true)
+            Draw.softShadow(canvas, r, Radius.PANEL * d, d)
+            canvas.drawRoundRect(r, Radius.PANEL * d, Radius.PANEL * d, Draw.fill(p.panel))
+            val label = Draw.text(context, 15f, p.text2, medium = true)
             canvas.drawText("存储总览", r.left + 20f * d, r.top + 28f * d, label)
 
             val used = (totalBytes - freeBytes).coerceAtLeast(0L)
@@ -269,7 +270,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
                     intArrayOf(p.brand, p.brand2), null, Shader.TileMode.CLAMP)
             canvas.save()
             if (pressed == 0) canvas.scale(0.97f, 0.97f, scanRect.centerX(), scanRect.centerY())
-            canvas.drawRoundRect(scanRect, 26f * d, 26f * d, buttonPaint)
+            canvas.drawRoundRect(scanRect, scanRect.height() / 2f, scanRect.height() / 2f, buttonPaint)
             val btnText = if (summary == null) "开始扫描" else "重新扫描"
             val bt = Draw.text(context, 15f, 0xFFFFFFFF.toInt(), medium = true)
             val iconSize = 17f * d
@@ -291,7 +292,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
                     rect.left + 26f * d, rect.centerY() + 3.6f * d, tp)
         }
         private fun drawCategories(canvas: Canvas, r: RectF, p: Palette) {
-            val head = Draw.text(context, 13f, p.text, medium = true)
+            val head = Draw.text(context, 15f, p.text, medium = true)
             canvas.drawText("空间分布", r.left, r.top + 16f * d, head)
             val sub = Draw.text(context, 10f, p.muted, align = Paint.Align.RIGHT)
             val scanText = if (scannedBytes > 0) "已扫描 " + Fmt.bytes(scannedBytes) else "尚未扫描"
@@ -315,10 +316,11 @@ class OverviewPage(context: Context) : FrameLayout(context) {
                 val row = i / 2
                 val left = r.left + col * (cardW + gap)
                 val card = RectF(left, top + row * (cardH + gap), left + cardW, top + row * (cardH + gap) + cardH)
-                canvas.drawRoundRect(card, 20f * d, 20f * d, Draw.fill(p.panel))
+                Draw.softShadow(canvas, card, Radius.PANEL * d, d)
+                canvas.drawRoundRect(card, Radius.PANEL * d, Radius.PANEL * d, Draw.fill(p.panel))
                 if (!scanning && i == main && scannedBytes > 0) {
                     val glow = Draw.stroke(Theme.alpha(colors[i], 90), 1f * d)
-                    canvas.drawRoundRect(card, 20f * d, 20f * d, glow)
+                    canvas.drawRoundRect(card, Radius.PANEL * d, Radius.PANEL * d, glow)
                 }
                 drawCatIcon(canvas, i, card.left + 16f * d, card.top + 18f * d, 24f * d, colors[i], p)
 
@@ -419,27 +421,27 @@ class OverviewPage(context: Context) : FrameLayout(context) {
                 canvas: Canvas, r: RectF, index: Int,
                 title: String, subtitle: String, icon: Icon, color: Int, p: Palette,
         ) {
-            Draw.card(canvas, r, 16f * d, p.panel, p.line)
+            Draw.card(canvas, r, Radius.PANEL * d, p.panel, p.line, shadow = true)
             if (pressed == index + 1) {
-                canvas.drawRoundRect(r, 16f * d, 16f * d, Draw.fill(Theme.alpha(p.brand, 12)))
+                canvas.drawRoundRect(r, Radius.PANEL * d, Radius.PANEL * d, Draw.fill(Theme.alpha(p.brand, 12)))
             }
             val cx = r.left + 38f * d
             canvas.drawCircle(cx, r.centerY(), 18f * d, Draw.fill(Theme.alpha(color, if (p.dark) 42 else 22)))
             Draw.icon(canvas, icon, cx, r.centerY(), 20f * d, color, 1.9f * d)
-            val t = Draw.text(context, 13.5f, p.text, medium = true)
+            val t = Draw.text(context, 15f, p.text, medium = true)
             canvas.drawText(title, r.left + 66f * d, r.centerY() - 4f * d, t)
-            val s = Draw.text(context, 10f, p.muted)
+            val s = Draw.text(context, 11f, p.muted)
             canvas.drawText(subtitle, r.left + 66f * d, r.centerY() + 14f * d, s)
             Draw.icon(canvas, Icon.CHEVRON, r.right - 24f * d, r.centerY(), 14f * d, p.muted, 1.8f * d)
         }
 
         private fun drawSummary(canvas: Canvas, r: RectF, p: Palette) {
-            Draw.card(canvas, r, 18f * d, p.panel, p.line)
+            Draw.card(canvas, r, Radius.PANEL * d, p.panel, p.line, shadow = true)
             val s = summary
             if (s == null || s.finishedAt <= 0L) {
                 canvas.drawCircle(r.left + 38f * d, r.centerY(), 18f * d, Draw.fill(p.panelSunken))
                 Draw.icon(canvas, Icon.REFRESH, r.left + 38f * d, r.centerY(), 18f * d, p.muted, 1.8f * d)
-                val t = Draw.text(context, 13f, p.text2, medium = true)
+                val t = Draw.text(context, 15f, p.text2, medium = true)
                 canvas.drawText("还没有扫描记录", r.left + 66f * d, r.centerY() - 4f * d, t)
                 val s2 = Draw.text(context, 10f, p.muted)
                 canvas.drawText("扫描后这里显示文件数、耗时与时间", r.left + 66f * d, r.centerY() + 14f * d, s2)

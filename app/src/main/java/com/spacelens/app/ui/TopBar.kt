@@ -15,7 +15,7 @@ import android.view.ViewConfiguration
 /** 顶部标题栏：品牌标识 + 页标题 + 本地/回收站徽章。长按 1.5s 留给 FPS HUD（隐藏功能）。 */
 class TopBar(context: Context) : View(context) {
 
-    var title: String = "总览"
+    var title: String = "空间"
         set(value) {
             field = value
             invalidate()
@@ -58,6 +58,10 @@ class TopBar(context: Context) : View(context) {
         val mark = 34f * density
         val markTop = (height - mark) / 2f
 
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), Draw.fill(p.panel))
+        canvas.drawLine(0f, height - 0.5f * density, width.toFloat(), height - 0.5f * density,
+                Draw.stroke(p.line, 1f * density))
+
         // 品牌标记：手机显示；平板交给左侧 NavRail，避免重复
         val titleX: Float
         if (showBrand) {
@@ -88,10 +92,10 @@ class TopBar(context: Context) : View(context) {
             titleX = left
         }
 
-        val titlePaint = Draw.text(context, 20f, p.text, serif = true)
+        val titlePaint = Draw.text(context, 18f, p.text, medium = true)
         canvas.drawText(title, titleX, height / 2f + 1f * density, titlePaint)
-        val subPaint = Draw.text(context, 10.5f, p.muted)
-        canvas.drawText(subtitle, titleX, height / 2f + 15f * density, subPaint)
+        val subPaint = Draw.text(context, 11.5f, p.muted)
+        canvas.drawText(subtitle, titleX, height / 2f + 16f * density, subPaint)
 
         // 本地/回收站徽章
         val chipW = 62f * density

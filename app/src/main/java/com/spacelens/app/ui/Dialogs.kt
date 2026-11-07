@@ -7,6 +7,7 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
 import android.view.Window
 import android.view.WindowManager
 import android.widget.LinearLayout
@@ -35,7 +36,7 @@ object Dialogs {
             orientation = LinearLayout.VERTICAL
             setPadding((22 * d).toInt(), (22 * d).toInt(), (22 * d).toInt(), (16 * d).toInt())
             background = GradientDrawable().apply {
-                cornerRadius = 18 * d
+                cornerRadius = Radius.PANEL * d
                 setColor(p.panel)
                 setStroke((1 * d).toInt().coerceAtLeast(1), p.line)
             }
@@ -44,13 +45,13 @@ object Dialogs {
         root.addView(TextView(activity).apply {
             text = title
             setTextColor(p.text)
-            textSize = 17f
+            textSize = 18f
             typeface = Draw.SANS_MEDIUM
         })
         root.addView(TextView(activity).apply {
             text = message
             setTextColor(p.text2)
-            textSize = 12f
+            textSize = 13f
             setLineSpacing(5f * d, 1f)
             setPadding(0, (12 * d).toInt(), 0, (20 * d).toInt())
         })
@@ -82,6 +83,7 @@ object Dialogs {
             val width = min(w - (44 * d).toInt(), (360 * d).toInt())
             dialog.window?.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT)
         }
+        sheetIn(root, d)
         dialog.show()
     }
 
@@ -90,14 +92,14 @@ object Dialogs {
         val d = activity.resources.displayMetrics.density
         return TextView(activity).apply {
             this.text = text
-            textSize = 12.5f
+            textSize = 13f
             typeface = Draw.SANS_MEDIUM
             gravity = Gravity.CENTER
-            setTextColor(if (primary) Color.WHITE else p.text2)
+            setTextColor(if (primary) Color.WHITE else p.brand)
             setPadding((18 * d).toInt(), (10 * d).toInt(), (18 * d).toInt(), (10 * d).toInt())
             background = GradientDrawable().apply {
-                cornerRadius = 12 * d
-                setColor(if (primary) p.brand else p.panelSoft)
+                cornerRadius = Radius.PILL * d
+                setColor(if (primary) p.brand else p.brandSoft)
             }
             setOnClickListener { click() }
             val lp = LinearLayout.LayoutParams(
@@ -106,6 +108,17 @@ object Dialogs {
             )
             lp.leftMargin = (8 * d).toInt()
             layoutParams = lp
+        }
+    }
+
+    private fun sheetIn(root: View, d: Float) {
+        root.alpha = 0f
+        root.translationY = 24f * d
+        root.post {
+            Motion.tween(MotionDurations.SHEET, Ease::softOut, { t ->
+                root.alpha = t
+                root.translationY = (1f - t) * 24f * d
+            })
         }
     }
 
@@ -171,7 +184,7 @@ object Dialogs {
             orientation = LinearLayout.VERTICAL
             setPadding((22 * d).toInt(), (22 * d).toInt(), (22 * d).toInt(), (14 * d).toInt())
             background = GradientDrawable().apply {
-                cornerRadius = 18 * d
+                cornerRadius = Radius.PANEL * d
                 setColor(p.panel)
                 setStroke((1 * d).toInt().coerceAtLeast(1), p.line)
             }
@@ -179,13 +192,13 @@ object Dialogs {
         root.addView(TextView(activity).apply {
             text = title
             setTextColor(p.text)
-            textSize = 17f
+            textSize = 18f
             typeface = Draw.SANS_MEDIUM
         })
         root.addView(TextView(activity).apply {
             text = message
             setTextColor(p.text2)
-            textSize = 12f
+            textSize = 13f
             setLineSpacing(5f * d, 1f)
             setPadding(0, (12 * d).toInt(), 0, (16 * d).toInt())
         })
@@ -201,7 +214,7 @@ object Dialogs {
                         else if (enabled) p.text2 else p.muted
                 )
                 background = GradientDrawable().apply {
-                    cornerRadius = 12 * d
+                    cornerRadius = Radius.SM * d
                     setColor(
                             if (primary && enabled) p.brand
                             else if (enabled) p.panelSoft else p.panelSunken
@@ -259,6 +272,7 @@ object Dialogs {
             val width = min(w - (36 * d).toInt(), (380 * d).toInt())
             dialog.window?.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT)
         }
+        sheetIn(root, d)
         dialog.show()
     }
 
@@ -272,7 +286,7 @@ object Dialogs {
             orientation = LinearLayout.VERTICAL
             setPadding((22 * d).toInt(), (22 * d).toInt(), (22 * d).toInt(), (18 * d).toInt())
             background = GradientDrawable().apply {
-                cornerRadius = 18 * d
+                cornerRadius = Radius.PANEL * d
                 setColor(p.panel)
                 setStroke((1 * d).toInt().coerceAtLeast(1), p.line)
             }
@@ -280,24 +294,24 @@ object Dialogs {
         root.addView(TextView(activity).apply {
             text = title
             setTextColor(p.text)
-            textSize = 17f
+            textSize = 18f
             typeface = Draw.SANS_MEDIUM
         })
         root.addView(TextView(activity).apply {
             text = message
             setTextColor(p.text2)
-            textSize = 12f
+            textSize = 13f
             setLineSpacing(5f * d, 1f)
             setPadding(0, (12 * d).toInt(), 0, (18 * d).toInt())
         })
         val hold = TextView(activity).apply {
             text = "长按 800ms 移入回收站"
-            textSize = 12f
+            textSize = 13f
             typeface = Draw.SANS_MEDIUM
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             background = GradientDrawable().apply {
-                cornerRadius = 14 * d
+                cornerRadius = Radius.PILL * d
                 setColor(p.danger)
             }
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (50 * d).toInt())
@@ -357,6 +371,7 @@ object Dialogs {
             val width = min(w - (36 * d).toInt(), (380 * d).toInt())
             dialog.window?.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT)
         }
+        sheetIn(root, d)
         dialog.show()
     }
     fun showSearch(activity: Activity, onSearch: (String) -> Unit) {
@@ -368,7 +383,7 @@ object Dialogs {
             orientation = LinearLayout.VERTICAL
             setPadding((22 * d).toInt(), (20 * d).toInt(), (22 * d).toInt(), (16 * d).toInt())
             background = GradientDrawable().apply {
-                cornerRadius = 18 * d
+                cornerRadius = Radius.PANEL * d
                 setColor(p.panel)
                 setStroke((1 * d).toInt().coerceAtLeast(1), p.line)
             }
@@ -376,7 +391,7 @@ object Dialogs {
         root.addView(TextView(activity).apply {
             text = "搜索"
             setTextColor(p.text)
-            textSize = 17f
+            textSize = 18f
             typeface = Draw.SANS_MEDIUM
         })
         val input = android.widget.EditText(activity).apply {
@@ -392,7 +407,7 @@ object Dialogs {
             text = "取消"
             gravity = Gravity.CENTER
             setTextColor(p.muted)
-            textSize = 12f
+            textSize = 13f
             setOnClickListener { dialog.dismiss() }
             layoutParams = LinearLayout.LayoutParams(0, (42 * d).toInt(), 1f)
         }
@@ -400,7 +415,7 @@ object Dialogs {
             text = "搜索"
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            textSize = 12f
+            textSize = 13f
             typeface = Draw.SANS_MEDIUM
             background = GradientDrawable().apply {
                 cornerRadius = 12 * d
@@ -426,5 +441,6 @@ object Dialogs {
             dialog.window?.setLayout(min(w - (36 * d).toInt(), (380 * d).toInt()),
                     WindowManager.LayoutParams.WRAP_CONTENT)
         }
+        sheetIn(root, d)
         dialog.show()
     }}

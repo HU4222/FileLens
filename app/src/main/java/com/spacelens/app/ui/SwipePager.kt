@@ -48,9 +48,9 @@ class SwipePager(context: Context) : ViewGroup(context) {
             onProgress?.invoke(target.toFloat())
             return
         }
-        val from = scrollX
-        anim = Motion.pageSpring(from.toFloat(), to.toFloat(), { value ->
-            scrollX = value.roundToInt()
+        val from = scrollX.toFloat()
+        anim = Motion.tween(MotionDurations.PAGE, Ease::softOut, { t ->
+            scrollX = (from + (to - from) * t).roundToInt()
             updatePageTransforms()
         }, {
             currentPage = target
@@ -152,11 +152,11 @@ class SwipePager(context: Context) : ViewGroup(context) {
     }
 
     private fun settleTo(page: Int) {
-        val from = scrollX
-        val to = page * width
+        val from = scrollX.toFloat()
+        val to = (page * width).toFloat()
         anim?.cancel()
-        anim = Motion.pageSpring(from.toFloat(), to.toFloat(), { value ->
-            scrollX = value.roundToInt()
+        anim = Motion.tween(MotionDurations.PAGE, Ease::softOut, { t ->
+            scrollX = (from + (to - from) * t).roundToInt()
             updatePageTransforms()
         }, {
             currentPage = page
@@ -164,23 +164,19 @@ class SwipePager(context: Context) : ViewGroup(context) {
         })
     }
 
-    /** 旧页 1→0.96 淡出；新页 0.94→1 淡入；全部由同一个滚动进度驱动。 */
+    /** 页面切换：只做 6dp 上移 + 淡入，不缩放、不做 3D。 */
     private fun updatePageTransforms() {
         if (width <= 0) return
         val progress = scrollX.toFloat() / width
+        val d = resources.displayMetrics.density
         for (i in 0 until childCount) {
             val child = getChildAt(i)
             val delta = i - progress
             val ad = abs(delta).coerceIn(0f, 1f)
-            if (delta < 0f) {
-                child.scaleX = 1f - 0.04f * ad
-                child.scaleY = 1f - 0.04f * ad
-                child.alpha = (1f - ad * 1.5f).coerceIn(0f, 1f)
-            } else {
-                child.scaleX = 0.94f + 0.06f * (1f - ad)
-                child.scaleY = 0.94f + 0.06f * (1f - ad)
-                child.alpha = (1f - ad * 0.8f).coerceIn(0f, 1f)
-            }
+            child.scaleX = 1f
+            child.scaleY = 1f
+            child.translationY = 6f * d * ad
+            child.alpha = (1f - 0.25f * ad).coerceIn(0f, 1f)
         }
     }
 
