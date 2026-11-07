@@ -60,6 +60,8 @@ import com.spacelens.app.ui.TabBar
 import com.spacelens.app.ui.Theme
 import com.spacelens.app.ui.ThemeMode
 import com.spacelens.app.ui.TopBar
+import com.spacelens.app.ui.PreviewPage
+import com.spacelens.app.ui.RankPage
 import com.spacelens.app.ui.TransferPage
 import com.spacelens.app.ui.TrashPage
 import com.spacelens.app.ui.TreePage
@@ -295,6 +297,7 @@ class MainActivity : Activity() {
             cleanPage.onShown()
         }
         overviewPage.onBench = { showBenchOverlay() }
+        overviewPage.onRank = { showRankPage() }
         overviewPage.onCategory = { category ->
             searchPage.applyTypeFilter(category)
             selectTab(1, animate = true)
@@ -321,6 +324,9 @@ class MainActivity : Activity() {
             searchPage.onShown()
         }
         searchPage.store = store
+        searchPage.onPreview = { node ->
+            showPreview(listOf(store.pathOf(node)), 0)
+        }
         searchPage.rootPath = rootPath()
         searchPage.onOpenLocation = { node -> showTreeAt(node) }
         searchPage.onDeleteRequested = { node -> deleteSingle(node) }
@@ -412,6 +418,27 @@ class MainActivity : Activity() {
 
     private fun isTreeVisible(): Boolean =
             ::treeOverlay.isInitialized && treeOverlay.visibility == View.VISIBLE
+
+    private fun showRankPage() {
+        if (store.count <= 1) return
+        val dialog = android.app.Dialog(this,
+                android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        val page = RankPage(this, store)
+        page.onClose = { dialog.dismiss() }
+        page.onPreview = { path -> showPreview(listOf(path), 0) }
+        dialog.setContentView(page)
+        dialog.show()
+    }
+
+    private fun showPreview(paths: List<String>, start: Int) {
+        if (paths.isEmpty()) return
+        val dialog = android.app.Dialog(this,
+                android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        val page = PreviewPage(this, paths, start)
+        page.onClose = { dialog.dismiss() }
+        dialog.setContentView(page)
+        dialog.show()
+    }
 
     private fun showTrashPage() {
         val dialog = android.app.Dialog(this,
