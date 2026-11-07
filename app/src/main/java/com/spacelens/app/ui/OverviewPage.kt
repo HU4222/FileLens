@@ -26,6 +26,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
     var onStartScan: (() -> Unit)? = null
     var onOpenTab: ((Int) -> Unit)? = null
     var onHealth: (() -> Unit)? = null
+    var onBench: (() -> Unit)? = null
 
     private val scroll = ScrollView(context)
     private val content = Content(context)
@@ -160,13 +161,15 @@ class OverviewPage(context: Context) : FrameLayout(context) {
         private val quickH = 66f * d
         private val quickGap = 10f * d
         private val summaryH = 96f * d
+        private val benchH = 74f * d
 
         private val scanRect = RectF()
+        private val benchRect = RectF()
         private val quickRects = Array(3) { RectF() }
         private var pressed = -1
 
         private fun contentHeight(): Int {
-            var y = 10f * d + heroH + 12f * d
+            var y = 10f * d + benchH + 12f * d + heroH + 12f * d
             y += catH + 14f * d
             y += 22f * d + quickH * 3 + quickGap * 2 + 14f * d
             y += summaryH + 26f * d + 72f * d
@@ -183,6 +186,12 @@ class OverviewPage(context: Context) : FrameLayout(context) {
             val p = Theme.palette
             val w = width.toFloat()
             var y = 10f * d
+
+            // ---- 测速入口 ----
+            val bench = RectF(margin, y, w - margin, y + benchH)
+            benchRect.set(bench)
+            drawBenchEntry(canvas, bench, p)
+            y = bench.bottom + 12f * d
 
             // ---- Hero 卡 ----
             val hero = RectF(margin, y, w - margin, y + heroH)
@@ -217,6 +226,26 @@ class OverviewPage(context: Context) : FrameLayout(context) {
             val footer = Draw.text(context, 11f, p.muted, align = Paint.Align.CENTER)
             canvas.drawText("文件管家 v" + BuildConfig.VERSION_NAME + " · HU4222",
                     w / 2f, sum.bottom + 38f * d, footer)
+        }
+
+        private fun drawBenchEntry(canvas: Canvas, r: RectF, p: Palette) {
+            Draw.card(canvas, r, Radius.PANEL * d, p.panel, p.line, shadow = true)
+            if (pressed == 4) {
+                canvas.drawRoundRect(r, Radius.PANEL * d, Radius.PANEL * d,
+                        Draw.fill(Theme.alpha(p.brand, 14)))
+            }
+            canvas.drawCircle(r.left + 34f * d, r.centerY(), 17f * d,
+                    Draw.fill(Theme.alpha(p.brand2, if (p.dark) 38 else 24)))
+            Draw.icon(canvas, Icon.SPEED, r.left + 34f * d, r.centerY(), 18f * d, p.brand2, 1.9f * d)
+            val title = Draw.text(context, 15f, p.text, medium = true)
+            canvas.drawText("存储测速", r.left + 62f * d, r.centerY() - 4f * d, title)
+            val sub = Draw.text(context, 11f, p.muted)
+            canvas.drawText("测一下这块盘读写有多快", r.left + 62f * d, r.centerY() + 14f * d, sub)
+            val btn = RectF(r.right - 76f * d, r.centerY() - 16f * d,
+                    r.right - 12f * d, r.centerY() + 16f * d)
+            canvas.drawRoundRect(btn, btn.height() / 2f, btn.height() / 2f, Draw.fill(p.brand))
+            val bp = Draw.text(context, 11f, 0xFFFFFFFF.toInt(), medium = true, align = Paint.Align.CENTER)
+            canvas.drawText("开始", btn.centerX(), btn.centerY() + 3.6f * d, bp)
         }
 
         private fun drawHero(canvas: Canvas, r: RectF, p: Palette) {
@@ -497,6 +526,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
                             1 -> onOpenTab?.invoke(1)
                             2 -> onOpenTab?.invoke(2)
                             3 -> onHealth?.invoke()
+                            4 -> onBench?.invoke()
                         }
                     }
                     return true
@@ -511,6 +541,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
         }
 
         private fun hit(x: Float, y: Float): Int {
+            if (benchRect.contains(x, y)) return 4
             if (scanRect.contains(x, y)) return 0
             for (i in quickRects.indices) if (quickRects[i].contains(x, y)) return i + 1
             return -1

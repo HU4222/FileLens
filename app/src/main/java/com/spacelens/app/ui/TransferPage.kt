@@ -1,20 +1,26 @@
 package com.spacelens.app.ui
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -27,98 +33,62 @@ import com.spacelens.app.TransferService
 import java.net.NetworkInterface
 import kotlin.math.max
 
-/** 传输页：启动内置 HTTP 服务，电脑浏览器访问，手机 WebView 本机管理。 */
-class TransferPage(context: Context) : LinearLayout(context) {
+/**
+ * 传输页：进入即启动服务，WebView 作为主界面。
+ * 地址/二维码放进「其他设备」底部面板，不再占据首屏。
+ */
+class TransferPage(context: Context) : FrameLayout(context) {
 
     private val status = TextView(context)
+    private val other = TextView(context)
+    private val web = WebView(context)
+    private val errorView = LinearLayout(context)
+    private val errorText = TextView(context)
+    private val panel = FrameLayout(context)
+    private val sheet = LinearLayout(context)
     private val address = TextView(context)
     private val pinText = TextView(context)
-    private val start = Button(context)
-    private val stop = Button(context)
     private val qr = ImageView(context)
-    private val hint = TextView(context)
-    private var webView: WebView? = null
     private val handler = Handler(Looper.getMainLooper())
     private var poll: Runnable? = null
+    private var starting = false
+    private var loadedUrl = ""
+    private var panelShown = false
+    private val prefs = context.getSharedPreferences("filelens_transfer", Context.MODE_PRIVATE)
 
     init {
-        orientation = VERTICAL
-        setPadding(dp(18f), dp(6f), dp(18f), dp(8f))
-        setBackgroundColor(Color.TRANSPARENT)
+        setBackgroundColor(Theme.palette.bg)
 
-        addView(TextView(context).apply {
-            text = "局域网互传"
-            textSize = 18f
-            typeface = Draw.SANS_MEDIUM
-            setTextColor(Theme.palette.text)
-        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-
+        val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val bar = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16f), 0, dp(12f), 0)
+            setBackgroundColor(Theme.palette.panel)
+        }
         status.apply {
             text = "未启动"
             textSize = 13f
             setTextColor(Theme.palette.muted)
-            setPadding(0, dp(5f), 0, dp(2f))
         }
-        addView(status, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-
-        address.apply {
-            text = "启动后显示电脑访问地址"
-            textSize = 13f
-            setTextColor(Theme.palette.text2)
-            setTextIsSelectable(true)
-            setPadding(0, dp(2f), 0, 0)
-        }
-        addView(address, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-
-        pinText.apply {
-            text = ""
+        bar.addView(status, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        other.apply {
+            text = "其他设备"
             textSize = 12f
-            setTextColor(Theme.palette.muted)
-            setPadding(0, dp(2f), 0, dp(6f))
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.brand)
+            setPadding(dp(10f), dp(6f), dp(10f), dp(6f))
+            background = rounded(Theme.palette.brandSoft, Theme.palette.brandSoft, Radius.PILL)
+            setOnClickListener { showPanel() }
         }
-        addView(pinText, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        bar.addView(other, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        content.addView(bar, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(48f)))
 
-        val buttons = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        start.text = "启动服务"
-        start.textSize = 12.5f
-        start.setTextColor(Color.WHITE)
-        start.background = rounded(Theme.palette.brand, Theme.palette.brand, Radius.PILL)
-        start.setOnClickListener { requestNotificationThenStart() }
-        stop.text = "停止服务"
-        stop.textSize = 12.5f
-        stop.setTextColor(Theme.palette.brand)
-        stop.background = rounded(Theme.palette.brandSoft, Theme.palette.brandSoft, Radius.PILL)
-        stop.visibility = GONE
-        stop.setOnClickListener { stopTransfer() }
-        buttons.addView(start, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        val slp = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
-        slp.leftMargin = dp(8f)
-        buttons.addView(stop, slp)
-        addView(buttons, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-
-        qr.apply {
-            visibility = GONE
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            setPadding(0, dp(10f), 0, dp(6f))
-        }
-        val qlp = LayoutParams(dp(150f), dp(150f))
-        qlp.gravity = Gravity.CENTER_HORIZONTAL
-        addView(qr, qlp)
-
-        hint.apply {
-            text = "电脑浏览器打开上面的地址，输入配对码；手机也可在下方页面管理文件。"
-            textSize = 11.5f
-            setTextColor(Theme.palette.muted)
-            setLineSpacing(dp(3f).toFloat(), 1f)
-            setPadding(0, dp(4f), 0, dp(6f))
-        }
-        addView(hint, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-
-        val web = WebView(context).apply {
-            visibility = GONE
+        web.apply {
+            visibility = View.INVISIBLE
             setBackgroundColor(Theme.palette.panel)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -127,20 +97,138 @@ class TransferPage(context: Context) : LinearLayout(context) {
             settings.allowContentAccess = false
             webViewClient = WebViewClient()
         }
-        webView = web
-        addView(web, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+        content.addView(web, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+
+        errorView.apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Theme.palette.bg)
+            visibility = GONE
+        }
+        errorText.apply {
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.muted)
+            setLineSpacing(dp(4f).toFloat(), 1f)
+        }
+        errorView.addView(errorText, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        val retry = Button(context).apply {
+            text = "重试"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            background = rounded(Theme.palette.brand, Theme.palette.brand, Radius.PILL)
+            setOnClickListener {
+                errorView.visibility = GONE
+                startService()
+            }
+        }
+        val rlp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        rlp.gravity = Gravity.CENTER
+        rlp.topMargin = dp(12f)
+        errorView.addView(retry, rlp)
+        addView(errorView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+
+        buildPanel()
+        addView(panel, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         updateUi()
+    }
+
+    private fun buildPanel() {
+        panel.apply {
+            visibility = GONE
+            setBackgroundColor(0x660B1020)
+            setOnClickListener { hidePanel() }
+        }
+        sheet.apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20f), dp(18f), dp(20f), dp(18f))
+            setBackgroundColor(Theme.palette.panel)
+            background = rounded(Theme.palette.panel, Theme.palette.line, Radius.PANEL)
+            setOnClickListener { }
+        }
+        val sheetLp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        sheetLp.gravity = Gravity.BOTTOM
+        sheetLp.leftMargin = dp(12f)
+        sheetLp.rightMargin = dp(12f)
+        sheetLp.bottomMargin = dp(12f)
+        panel.addView(sheet, sheetLp)
+
+        sheet.addView(TextView(context).apply {
+            text = "其他设备访问"
+            textSize = 18f
+            typeface = Draw.SANS_MEDIUM
+            setTextColor(Theme.palette.text)
+        }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        address.apply {
+            textSize = 15f
+            setTextColor(Theme.palette.text2)
+            setPadding(0, dp(10f), 0, 0)
+            setTextIsSelectable(true)
+            setOnClickListener { copyAddress() }
+        }
+        sheet.addView(address, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        pinText.apply {
+            textSize = 12f
+            setTextColor(Theme.palette.muted)
+            setPadding(0, dp(4f), 0, dp(4f))
+        }
+        sheet.addView(pinText, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        qr.apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setPadding(0, dp(6f), 0, dp(6f))
+        }
+        val qlp = LinearLayout.LayoutParams(dp(180f), dp(180f))
+        qlp.gravity = Gravity.CENTER_HORIZONTAL
+        sheet.addView(qr, qlp)
+
+        val stop = Button(context).apply {
+            text = "停止服务"
+            textSize = 12.5f
+            setTextColor(Color.WHITE)
+            background = rounded(Theme.palette.danger, Theme.palette.danger, Radius.PILL)
+            setOnClickListener { confirmStop() }
+        }
+        sheet.addView(stop, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(42f)))
+        val close = TextView(context).apply {
+            text = "收起"
+            textSize = 11.5f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.muted)
+            setPadding(0, dp(10f), 0, 0)
+            setOnClickListener { hidePanel() }
+        }
+        sheet.addView(close, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
     }
 
     fun onShown() {
         updateUi()
+        if (!TransferService.running) startService()
     }
 
     fun onResume() {
         updateUi()
     }
 
-    private fun requestNotificationThenStart() {
+    fun handleBack(): Boolean {
+        if (web.canGoBack()) {
+            web.goBack()
+            return true
+        }
+        return false
+    }
+
+    private fun startService() {
+        if (TransferService.running || starting) return
         val activity = context as? android.app.Activity
         if (Build.VERSION.SDK_INT >= 33 && activity != null &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
@@ -148,22 +236,14 @@ class TransferPage(context: Context) : LinearLayout(context) {
             ActivityCompat.requestPermissions(
                     activity, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 5002)
         }
-        startTransfer()
-    }
-
-    private fun startTransfer() {
-        if (TransferService.running) {
-            updateUi()
-            return
-        }
+        starting = true
+        errorView.visibility = GONE
         status.text = "正在启动…"
-        start.isEnabled = false
         try {
             ContextCompat.startForegroundService(context,
                     Intent(context, TransferService::class.java))
         } catch (t: Throwable) {
-            status.text = "启动失败：${t.message ?: "系统拒绝前台服务"}"
-            start.isEnabled = true
+            fail("启动失败：${t.message ?: "系统拒绝前台服务"}")
             return
         }
         poll?.let { handler.removeCallbacks(it) }
@@ -172,13 +252,13 @@ class TransferPage(context: Context) : LinearLayout(context) {
             override fun run() {
                 tries++
                 if (TransferService.running) {
-                    start.isEnabled = true
+                    starting = false
                     updateUi()
                     return
                 }
                 if (tries >= 25) {
-                    status.text = "启动失败：端口占用或系统限制（可重试）"
-                    start.isEnabled = true
+                    starting = false
+                    fail("启动失败：端口占用或系统限制")
                     return
                 }
                 handler.postDelayed(this, 200L)
@@ -188,51 +268,96 @@ class TransferPage(context: Context) : LinearLayout(context) {
         handler.postDelayed(job, 200L)
     }
 
-    private fun stopTransfer() {
-        try {
-            context.stopService(Intent(context, TransferService::class.java))
-        } catch (_: Throwable) {
-        }
-        webView?.loadUrl("about:blank")
-        webView?.visibility = GONE
-        qr.visibility = GONE
-        status.text = "已停止"
-        address.text = "启动后显示电脑访问地址"
-        pinText.text = ""
-        start.visibility = VISIBLE
-        stop.visibility = GONE
-        start.isEnabled = true
-    }
-
     private fun updateUi() {
         if (TransferService.running && TransferService.port > 0) {
+            starting = false
+            errorView.visibility = GONE
+            web.visibility = View.VISIBLE
             val p = TransferService.port
-            val ip = lanIp()
-            start.visibility = GONE
-            stop.visibility = VISIBLE
-            start.isEnabled = true
-            status.text = "运行中 · 端口 $p"
-            address.text = if (ip != null) "http://$ip:$p/" else "未找到局域网 IP，请先连接 Wi-Fi"
-            pinText.text = if (TransferService.pin.isNotEmpty()) "配对码：${TransferService.pin}" else ""
-            if (ip != null) {
-                qr.visibility = VISIBLE
-                qr.setImageBitmap(makeQr("http://$ip:$p/"))
-            } else {
-                qr.visibility = GONE
+            status.text = "传文件中 · 端口 $p"
+            status.setTextColor(Theme.palette.ok)
+            val url = "http://127.0.0.1:$p/?k=" + Uri.encode(TransferService.localToken)
+            if (loadedUrl != url) {
+                loadedUrl = url
+                web.loadUrl(url)
             }
-            val web = webView ?: return
-            web.visibility = VISIBLE
-            val local = "http://127.0.0.1:$p/"
-            if (web.url != local) web.loadUrl(local)
+            if (TransferService.pin.isNotEmpty()) {
+                pinText.text = "配对码：${TransferService.pin}"
+            }
+            val ip = lanIp()
+            address.text = if (ip != null) {
+                "http://$ip:$p/  （点此复制）"
+            } else {
+                "未找到局域网 IP，请先连接 Wi-Fi"
+            }
+            if (ip != null) qr.setImageBitmap(makeQr("http://$ip:$p/"))
+            maybeShowHint()
         } else {
-            start.visibility = VISIBLE
-            stop.visibility = GONE
+            web.visibility = View.INVISIBLE
             status.text = "未启动"
-            address.text = "启动后显示电脑访问地址"
-            pinText.text = ""
-            qr.visibility = GONE
-            webView?.visibility = GONE
+            status.setTextColor(Theme.palette.muted)
         }
+    }
+
+    private fun fail(message: String) {
+        starting = false
+        status.text = "未启动"
+        status.setTextColor(Theme.palette.muted)
+        errorText.text = message
+        errorView.visibility = VISIBLE
+    }
+
+    private fun showPanel() {
+        if (panelShown) return
+        panelShown = true
+        panel.visibility = VISIBLE
+        panel.alpha = 0f
+        sheet.translationY = dp(24f).toFloat()
+        Motion.tween(MotionDurations.FADE, update = { t -> panel.alpha = t })
+        Motion.tween(MotionDurations.SHEET, Ease::softOut, { t ->
+            sheet.translationY = (1f - t) * dp(24f)
+        })
+    }
+
+    private fun hidePanel() {
+        if (!panelShown) return
+        panelShown = false
+        Motion.tween(MotionDurations.FADE, update = { t ->
+            panel.alpha = 1f - t
+        }, end = {
+            panel.visibility = GONE
+        })
+    }
+
+    private fun confirmStop() {
+        val activity = context as? android.app.Activity ?: return
+        Dialogs.showMessage(activity, "停止传输服务",
+                "停止后电脑和其他设备将立即断开；手机上打开的文件页面也会停止。",
+                positive = "停止服务", onPositive = {
+                    hidePanel()
+                    try {
+                        context.stopService(Intent(context, TransferService::class.java))
+                    } catch (_: Throwable) {
+                    }
+                    loadedUrl = ""
+                    web.loadUrl("about:blank")
+                    updateUi()
+                },
+                negative = "取消", onNegative = {})
+    }
+
+    private fun copyAddress() {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("FileLens 地址", address.text))
+        Toast.makeText(context, "地址已复制", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun maybeShowHint() {
+        if (prefs.getBoolean("hint_shown", false)) return
+        prefs.edit().putBoolean("hint_shown", true).apply()
+        Toast.makeText(context,
+                "这个页面也能在电脑浏览器里打开，地址在右上角「其他设备」里",
+                Toast.LENGTH_LONG).show()
     }
 
     private fun lanIp(): String? {

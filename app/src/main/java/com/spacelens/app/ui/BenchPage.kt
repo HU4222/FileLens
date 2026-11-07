@@ -15,6 +15,7 @@ import kotlin.math.sin
 class BenchPage(context: Context) : FrameLayout(context) {
 
     var onStart: (() -> Unit)? = null
+    var onCancel: (() -> Unit)? = null
 
     private val scroll = ScrollView(context)
     private val content = Content(context)
@@ -121,16 +122,31 @@ class BenchPage(context: Context) : FrameLayout(context) {
             y += 3 * cardH + 2 * gap + 16f * d
 
             buttonRect.set(margin, y, w - margin, y + 46f * d)
+            val base = if (running) p.danger else p.brand
             canvas.drawRoundRect(buttonRect, 23f * d, 23f * d,
-                    Draw.fill(if (pressed) Theme.blend(p.brand, p.brand2, 0.35f) else p.brand))
+                    Draw.fill(if (pressed) Theme.blend(base, p.brand2, 0.35f) else base))
             val bt = Draw.text(context, 13f, 0xFFFFFFFF.toInt(), medium = true, align = Paint.Align.CENTER)
-            canvas.drawText(if (running) "测速中…" else "开始测速", buttonRect.centerX(), buttonRect.centerY() + 4.5f * d, bt)
+            canvas.drawText(if (running) "取消测速" else "开始测速", buttonRect.centerX(), buttonRect.centerY() + 4.5f * d, bt)
             y = buttonRect.bottom + 20f * d
 
-            val disclaimer = Draw.text(context, 9.5f, p.muted, align = Paint.Align.LEFT)
-            canvas.drawText(if (result != null) "最弱项：${result!!.weakest} · 写入 ${com.spacelens.app.core.Fmt.bytes(result!!.writeBytes)} · QD32 读 ${String.format(java.util.Locale.US, "%.0f", result!!.randReadQd32Iops)} IOPS" else "实际速度受主控、温度、剩余空间与文件系统影响，仅供参考。", margin + 2f * d, y, disclaimer)
+            val r = result
+            val disclaimer = Draw.text(context, 10f, p.text2, align = Paint.Align.LEFT)
+            canvas.drawText(if (r != null) {
+                String.format(java.util.Locale.US, "写入 %.0f MB/s · 读取 %.0f MB/s · %s",
+                        r.seqWriteMb, r.seqReadMb, r.grade)
+            } else {
+                "会占用约 128 MB 临时空间，测完自动清理。"
+            }, margin + 2f * d, y, disclaimer)
             val note = Draw.text(context, 9.5f, p.muted, align = Paint.Align.LEFT)
-            canvas.drawText((if (result?.cacheNote?.isNotEmpty() == true) result!!.cacheNote else "测试文件只写在应用专属目录，结束即删。") + " · 实际速度仅供参考。", margin + 2f * d, y + 17f * d, note)
+            val conclusion = if (r == null) {
+                "实际速度受主控、温度、剩余空间与文件系统影响，仅供参考。"
+            } else if (r.seqWriteMb >= 80.0) {
+                String.format(java.util.Locale.US, "这块盘传大文件大概 %.0f MB/s，够用。", r.seqWriteMb)
+            } else {
+                String.format(java.util.Locale.US, "这块盘偏慢，传大文件约 %.0f MB/s。", r.seqWriteMb)
+            }
+            canvas.drawText(conclusion + " · 测试文件只写在 cacheDir，结束即删。",
+                    margin + 2f * d, y + 17f * d, note)
         }
 
         private fun drawGauge(canvas: Canvas, r: RectF, p: Palette) {
@@ -193,7 +209,9 @@ class BenchPage(context: Context) : FrameLayout(context) {
                     val hit = buttonRect.contains(event.x, event.y)
                     pressed = false
                     invalidate()
-                    if (hit && !running) onStart?.invoke()
+                    if (hit) {
+                        if (running) onCancel?.invoke() else onStart?.invoke()
+                    }
                     return true
                 }
                 MotionEvent.ACTION_CANCEL -> {

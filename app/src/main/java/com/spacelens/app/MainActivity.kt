@@ -92,9 +92,13 @@ class MainActivity : Activity() {
     private lateinit var cleanPage: CleanPage
     private lateinit var transferPage: TransferPage
     private lateinit var treeOverlay: FrameLayout
+    private lateinit var benchOverlay: FrameLayout
+    private var benchRunning = false
 
     private var pendingScan = false
     private var awaitingSettings = false
+    private var visibleTab = -1
+    private var previousTab = 0
 
     private val store = NodeStore()
     private var scanner: Scanner? = null
@@ -242,6 +246,38 @@ class MainActivity : Activity() {
         root.addView(treeOverlay, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
+        // 测速保留为空间页的二级全屏页，不占第 5 个 Tab。
+        benchOverlay = FrameLayout(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(Theme.palette.bg)
+        }
+        benchOverlay.addView(benchPage, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        val backFromBench = TextView(this).apply {
+            text = "返回空间总览"
+            textSize = 11.5f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.palette.brand)
+            setPadding((16 * resources.displayMetrics.density).toInt(),
+                    (9 * resources.displayMetrics.density).toInt(),
+                    (16 * resources.displayMetrics.density).toInt(),
+                    (9 * resources.displayMetrics.density).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 14 * resources.displayMetrics.density
+                setColor(Theme.palette.brandSoft)
+                setStroke((1 * resources.displayMetrics.density).toInt().coerceAtLeast(1),
+                        Theme.palette.brand)
+            }
+            setOnClickListener { hideBenchOverlay() }
+        }
+        val bblp = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT)
+        bblp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        bblp.bottomMargin = (22 * resources.displayMetrics.density).toInt()
+        benchOverlay.addView(backFromBench, bblp)
+        root.addView(benchOverlay, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
         topBar.onLongPress = { toggleFpsHud() }
         tabBar.onSelect = { selectTab(it, animate = true) }
         navRail.onSelect = { selectTab(it, animate = true) }
@@ -259,6 +295,7 @@ class MainActivity : Activity() {
             selectTab(2, animate = true)
             cleanPage.onShown()
         }
+        overviewPage.onBench = { showBenchOverlay() }
         treePage.onStartScan = { requestScan() }
         treePage.onCancelScan = { cancelScan() }
         treePage.onNodeLongPress = { node -> onTreeNodeLongPress(node) }
@@ -287,6 +324,12 @@ class MainActivity : Activity() {
         cleanPage.store = store
         cleanPage.rootPath = rootPath()
         benchPage.onStart = { startBench() }
+        benchPage.onCancel = {
+            BenchEngine.cancel()
+            benchRunning = false
+            benchPage.setRunning(false)
+            toast("已取消测速")
+        }
         minePage.onAction = { onMineAction(it) }
 
         detailPane.onCopyPath = { path -> copyPath(path) }
@@ -323,7 +366,10 @@ class MainActivity : Activity() {
 
     private fun selectTab(index: Int, animate: Boolean) {
         val i = index.coerceIn(0, titles.size - 1)
+        if (visibleTab >= 0 && i != visibleTab) previousTab = visibleTab
+        visibleTab = i
         hideTreeOverlay()
+        hideBenchOverlay()
         updateTopBar(i)
         shell.setTab(i)
         navRail.setSelected(i)
@@ -343,6 +389,8 @@ class MainActivity : Activity() {
     }
 
     private fun onPageSettled(index: Int) {
+        if (visibleTab >= 0 && index != visibleTab) previousTab = visibleTab
+        visibleTab = index
         updateTopBar(index)
         shell.setTab(index)
         navRail.setSelected(index)
@@ -372,6 +420,19 @@ class MainActivity : Activity() {
 
     private fun hideTreeOverlay() {
         if (::treeOverlay.isInitialized) treeOverlay.visibility = View.GONE
+    }
+
+    private fun isBenchVisible(): Boolean =
+            ::benchOverlay.isInitialized && benchOverlay.visibility == View.VISIBLE
+
+    private fun showBenchOverlay() {
+        if (!::benchOverlay.isInitialized) return
+        benchOverlay.visibility = View.VISIBLE
+        benchOverlay.bringToFront()
+    }
+
+    private fun hideBenchOverlay() {
+        if (::benchOverlay.isInitialized) benchOverlay.visibility = View.GONE
     }
 
     private fun showTreeAt(node: Int) {
@@ -1075,6 +1136,16 @@ class MainActivity : Activity() {
     }
 
     private fun startBench() {
+        if (benchRunning) return
+        Dialogs.showMessage(this, "存储测速",
+                "会占用约 128 MB 临时空间，测试文件只写入应用 cacheDir，测完立即清理。\n\n" +
+                        "测试期间请不要退出或锁屏，可随时取消。",
+                positive = "开始测速", onPositive = { runBench() },
+                negative = "取消", onNegative = {})
+    }
+
+    private fun runBench() {
+        benchRunning = true
         benchPage.setRunning(true)
         benchPage.setProgress("准备", 0f)
         BenchEngine.run(this, object : BenchEngine.Listener {
@@ -1084,6 +1155,7 @@ class MainActivity : Activity() {
 
             override fun onFinished(r: BenchEngine.Result) {
                 runOnUiThread {
+                    benchRunning = false
                     benchPage.setResult(r)
                     toast("测速完成 · ${r.grade} · 最弱项 ${r.weakest}")
                 }
@@ -1091,6 +1163,7 @@ class MainActivity : Activity() {
 
             override fun onError(message: String) {
                 runOnUiThread {
+                    benchRunning = false
                     benchPage.setRunning(false)
                     toast("测速失败：$message")
                 }
@@ -1332,6 +1405,10 @@ class MainActivity : Activity() {
             cancelSelection()
             return
         }
+        if (isBenchVisible()) {
+            hideBenchOverlay()
+            return
+        }
         if (isTreeVisible()) {
             if (treePage.goUp()) {
                 updateDetail()
@@ -1339,6 +1416,12 @@ class MainActivity : Activity() {
                 hideTreeOverlay()
                 updateDetail()
             }
+            return
+        }
+        if (pager.currentPage == 3 && ::transferPage.isInitialized) {
+            if (transferPage.handleBack()) return
+            val target = if (previousTab in 0..2) previousTab else 0
+            selectTab(target, animate = true)
             return
         }
         if (pager.currentPage != 0) {
@@ -1350,6 +1433,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        BenchEngine.cancel()
         scanner?.cancel()
         scanner = null
         saveThread?.interrupt()

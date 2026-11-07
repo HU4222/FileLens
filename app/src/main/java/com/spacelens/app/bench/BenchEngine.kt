@@ -54,7 +54,7 @@ object BenchEngine {
         cancelled = false
         thread = Thread({
             try {
-                val dir = File(context.getExternalFilesDir(null), "bench")
+                val dir = File(context.cacheDir, "bench")
                 dir.mkdirs()
                 clear(dir)
                 val free = dir.usableSpace
