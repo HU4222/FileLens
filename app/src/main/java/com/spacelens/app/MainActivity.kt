@@ -300,6 +300,7 @@ class MainActivity : Activity() {
     private fun installInsets() {
         root.setOnApplyWindowInsetsListener { _, insets ->
             shell.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom)
+            treeOverlay.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom)
             insets
         }
         root.requestApplyInsets()
