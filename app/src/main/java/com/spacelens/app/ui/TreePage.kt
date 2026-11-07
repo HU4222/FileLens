@@ -35,7 +35,6 @@ class TreePage(context: Context) : FrameLayout(context) {
     private val selectionBar = SelectionBar(context)
     private val treemap = TreemapView(context)
     private val list = ListView(context)
-    private val ring = RingView(context)
     private var activeView = 0
     private var selectedNodes: Set<Int> = emptySet()
     private var selectionActive = false
@@ -77,8 +76,6 @@ class TreePage(context: Context) : FrameLayout(context) {
         sortHeader.setOnClickListener { sortMode = (sortMode + 1) % 3; showList() }
         column.addView(sortHeader, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         column.addView(list, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-        ring.visibility = View.GONE
-        column.addView(ring, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         addView(column, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         treemap.setLayoutMode(metrics.maxDepth, metrics.maxBlocks)
 
@@ -98,11 +95,9 @@ class TreePage(context: Context) : FrameLayout(context) {
         top.onUnavailable = { name ->
             when (name) {
                 "列表视图" -> showList()
-                "环形视图" -> showRing()
                 else -> onUnavailableView?.invoke(name)
             }
         }
-        ring.onDrill = { node -> showRoot(node) }
         top.onTreeView = { showTree() }
         top.onSearch = { onSearch?.invoke() }
     }
@@ -190,7 +185,6 @@ class TreePage(context: Context) : FrameLayout(context) {
         treemap.visibility = View.VISIBLE
         list.visibility = View.GONE
         sortHeader.visibility = View.GONE
-        ring.visibility = View.GONE
         top.setView(0)
         top.invalidate()
     }
@@ -199,7 +193,6 @@ class TreePage(context: Context) : FrameLayout(context) {
         val s = store ?: return
         activeView = 1
         treemap.visibility = View.GONE
-        ring.visibility = View.GONE
         list.visibility = View.VISIBLE
         sortHeader.visibility = View.VISIBLE
         val items = when (sortMode) {
@@ -307,22 +300,8 @@ class TreePage(context: Context) : FrameLayout(context) {
         top.invalidate()
     }
 
-    private fun showRing() {
-        val s = store ?: return
-        activeView = 2
-        treemap.visibility = View.GONE
-        list.visibility = View.GONE
-        sortHeader.visibility = View.GONE
-        ring.visibility = View.VISIBLE
-        ring.setTree(s, rootIndex)
-        top.setView(2)
-        top.invalidate()
-    }
-
     private fun refreshViews() {
-        val s = store ?: return
         if (activeView == 1) showList()
-        if (activeView == 2) ring.setTree(s, rootIndex)
     }
     fun setForbidden(nodes: Map<Int, String>) {
         treemap.setForbidden(nodes)
@@ -406,13 +385,13 @@ class TreePage(context: Context) : FrameLayout(context) {
         private var viewMode = 0
 
         fun setView(mode: Int) {
-            viewMode = mode.coerceIn(0, 2)
+            viewMode = mode.coerceIn(0, 1)
             invalidate()
         }
 
         private val scanRect = RectF()
         private val backRect = RectF()
-        private val chipRects = Array(4) { RectF() }
+        private val chipRects = Array(3) { RectF() }
         private val crumbRects = HashMap<Int, RectF>()
         private var pressed = -1
 
@@ -526,13 +505,13 @@ class TreePage(context: Context) : FrameLayout(context) {
             y += crumbH
 
             // 视图切换
-            val names = arrayOf("树图", "列表", "环形", "搜索")
-            val icons = arrayOf(Icon.TREE, Icon.LIST, Icon.RING, Icon.SEARCH)
+            val names = arrayOf("树图", "列表", "搜索")
+            val icons = arrayOf(Icon.TREE, Icon.LIST, Icon.SEARCH)
             var cx = margin + 2f * d
-            for (i in 0 until 4) {
+            for (i in 0 until 3) {
                 val r = RectF(cx, y + 1f * d, cx + 64f * d, y + chipH - 1f * d)
                 chipRects[i].set(r)
-                val active = i == viewMode && i < 3
+                val active = i == viewMode
                 canvas.drawRoundRect(r, Radius.SM * d, Radius.SM * d,
                         Draw.fill(if (active) p.brandSoft else p.panelSunken))
                 Draw.icon(canvas, icons[i], r.left + 16f * d, r.centerY(), 13f * d,
@@ -568,7 +547,6 @@ class TreePage(context: Context) : FrameLayout(context) {
                             1 -> onBack?.invoke()
                             2 -> onCrumb?.invoke(crumbHit(event.x, event.y))
                             3 -> onUnavailable?.invoke("列表视图")
-                            4 -> onUnavailable?.invoke("环形视图")
                             5 -> onTreeView?.invoke()
                             6 -> onSearch?.invoke()
                         }
@@ -595,8 +573,7 @@ class TreePage(context: Context) : FrameLayout(context) {
             for (rect in crumbRects.values) if (rect.contains(x, y)) return 2
             if (chipRects[0].contains(x, y)) return 5
             if (chipRects[1].contains(x, y)) return 3
-            if (chipRects[2].contains(x, y)) return 4
-            if (chipRects[3].contains(x, y)) return 6
+            if (chipRects[2].contains(x, y)) return 6
             return -1
         }
     }
