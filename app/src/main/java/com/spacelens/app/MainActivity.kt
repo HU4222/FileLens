@@ -134,8 +134,15 @@ class MainActivity : Activity() {
             "权限 · 回收站",
     )
 
+    @Volatile private var startT0 = 0L
+    @Volatile private var startT1 = 0L
+    @Volatile private var startT2 = 0L
+    private var frameLogged = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        startT1 = android.os.SystemClock.uptimeMillis()
+        startT0 = if (App.t0 > 0L) App.t0 else startT1
         val bootAt = android.os.SystemClock.uptimeMillis()
         prefs = Prefs(this)
         Theme.init(this, prefs.themeMode)
@@ -156,6 +163,7 @@ class MainActivity : Activity() {
         updateMine()
         updateOverview()
         loadSnapshot()
+        startT2 = android.os.SystemClock.uptimeMillis()
         cleanupExpiredTrash()
 
         // 启动标识（420ms），首帧即品牌页，不阻塞交互初始化
@@ -170,8 +178,18 @@ class MainActivity : Activity() {
                 "displayHz=${currentRefreshRate()}")
     }
 
-    override fun onNewIntent(intent: android.content.Intent) {
-        super.onNewIntent(intent)
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && !frameLogged && com.spacelens.app.BuildConfig.DEBUG) {
+            frameLogged = true
+            val t3 = android.os.SystemClock.uptimeMillis()
+            android.util.Log.i("FLCSTART",
+                    "t0_t1=${startT1 - startT0}ms t1_t2=${startT2 - startT1}ms " +
+                            "t2_t3=${t3 - startT2}ms total=${t3 - startT0}ms")
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {        super.onNewIntent(intent)
         setIntent(intent)
         root.post { applyDebugIntent() }
     }
@@ -208,6 +226,31 @@ class MainActivity : Activity() {
                 android.util.Log.i("FileLensDump",
                         "DTrash entries=${es.size} bytes=${es.sumOf { it.size }}")
             }, 6000L)
+        }
+        if (intent?.getBooleanExtra("flDumpControls", false) == true) {
+            root.postDelayed({ com.spacelens.app.debug.ControlRegistry.dumpToLog() }, 1500L)
+        }
+        intent?.getStringExtra("flTap")?.let { id ->
+            root.postDelayed({ dispatchFlTap(id) }, 1500L)
+        }
+    }
+
+    /** 仅 Debug：按控制点 id 直接触发动作，绕开触摸坐标。 */
+    private fun dispatchFlTap(id: String) {
+        when {
+            id.startsWith("tab:") -> {
+                val map = mapOf("tab:空间" to 0, "tab:搜索" to 1, "tab:清理" to 2,
+                        "tab:传输" to 3, "tab:设置" to 4)
+                map[id]?.let { selectTab(it, true) }
+            }
+            id.startsWith("crumb:") -> {
+                val n = id.removePrefix("crumb:").toIntOrNull()
+                if (n != null && n in 0 until store.count) treePage.showRoot(n)
+            }
+            id == "back" -> {
+                val chain = store.chainOf(treePage.rootIndex)
+                if (chain.size >= 2) treePage.showRoot(chain[chain.size - 2])
+            }
         }
     }
 
@@ -1241,6 +1284,11 @@ class MainActivity : Activity() {
             val ms = (System.nanoTime() - begin) / 1_000_000L
             android.util.Log.i("SpaceLens", "snapshot load nodes=${meta?.nodes ?: -1} ms=$ms ok=${meta != null}")
             runOnUiThread {
+                if (com.spacelens.app.BuildConfig.DEBUG) {
+                    val t4 = android.os.SystemClock.uptimeMillis()
+                    android.util.Log.i("FLCSTART",
+                            "snapshot_load=${t4 - startT1}ms nodes=${store.count}")
+                }
                 snapshotLoading = false
                 indexLoading = false
                 searchPage.rootPath = rootPath()

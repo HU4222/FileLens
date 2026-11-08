@@ -94,10 +94,16 @@ class TabBar(context: Context) : View(context) {
                 Draw.stroke(Color.argb(20, 255, 255, 255), 1f * d))
 
         val iw = itemWidth()
+        val off = IntArray(2)
+        getLocationOnScreen(off)
+        com.spacelens.app.debug.ControlRegistry.clear("tabbar")
         val selectedColor = 0xFFB7B4FF.toInt()
         val selectedText = 0xFFEEF2FF.toInt()
         for (i in labels.indices) {
             val cx = contentLeft() + iw * (i + 0.5f)
+            com.spacelens.app.debug.ControlRegistry.put("tabbar", "tab:" + labels[i],
+                    labels[i], RectF(cx - iw / 2f + off[0], capsule.top + off[1],
+                    cx + iw / 2f + off[0], capsule.bottom + off[1]))
             val k = 1f - abs(progress - i).coerceIn(0f, 1f)
             val pressed = pressIndex == i
             val color = Theme.blend(0xFF8F9AB5.toInt(), selectedColor, k)

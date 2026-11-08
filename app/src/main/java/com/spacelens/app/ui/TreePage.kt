@@ -422,6 +422,13 @@ class TreePage(context: Context) : FrameLayout(context) {
         override fun onDraw(canvas: Canvas) {
             val p = Theme.palette
             val w = width.toFloat()
+            val off = IntArray(2)
+            getLocationOnScreen(off)
+            com.spacelens.app.debug.ControlRegistry.clear("tree")
+            fun reg(id: String, label: String, r: RectF) {
+                com.spacelens.app.debug.ControlRegistry.put("tree", id, label,
+                        RectF(r.left + off[0], r.top + off[1], r.right + off[0], r.bottom + off[1]))
+            }
             var y = 8f * d
             val root = RectF(margin, y, w - margin, y + rootH)
             Draw.card(canvas, root, Radius.PANEL * d, p.panel, p.line, shadow = true)
@@ -434,6 +441,7 @@ class TreePage(context: Context) : FrameLayout(context) {
                 if (pressed == 1) canvas.drawCircle(backRect.centerX(), backRect.centerY(), 16f * d,
                         Draw.fill(Theme.alpha(p.brand, 18)))
                 Draw.icon(canvas, Icon.BACK, backRect.centerX(), backRect.centerY(), 17f * d, p.text, 2f * d)
+                reg("back", "返回", backRect)
             } else {
                 canvas.drawCircle(root.left + 31f * d, root.centerY(), 16f * d,
                         Draw.fill(Theme.alpha(p.brand, if (p.dark) 40 else 20)))
@@ -466,6 +474,7 @@ class TreePage(context: Context) : FrameLayout(context) {
 
             scanRect.set(root.right - scanW - 12f * d, root.centerY() - 16f * d,
                     root.right - 12f * d, root.centerY() + 16f * d)
+            reg("scan", if (scanning) "停止" else "重扫", scanRect)
             if (compact) {
                 canvas.drawCircle(scanRect.centerX(), scanRect.centerY(), 16f * d,
                         Draw.fill(if (scanning) Theme.alpha(p.danger, 32) else p.brand))
@@ -520,6 +529,7 @@ class TreePage(context: Context) : FrameLayout(context) {
                     val rect = RectF(cx - 4f * d, y - 7f * d,
                             cx + paint.measureText(ew) + 4f * d, y + crumbH + 7f * d)
                     crumbRects[node] = rect
+                    reg("crumb:$node", nm, rect)
                     cx += paint.measureText(ew) + 6f * d
                 }
             }
@@ -532,6 +542,7 @@ class TreePage(context: Context) : FrameLayout(context) {
             for (i in 0 until 3) {
                 val r = RectF(cx, y + 1f * d, cx + 64f * d, y + chipH - 1f * d)
                 chipRects[i].set(r)
+                reg("chip:" + names[i], names[i], r)
                 val active = i == viewMode
                 canvas.drawRoundRect(r, Radius.SM * d, Radius.SM * d,
                         Draw.fill(if (active) p.brandSoft else p.panelSunken))
