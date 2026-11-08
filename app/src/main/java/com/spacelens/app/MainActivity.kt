@@ -157,6 +157,25 @@ class MainActivity : Activity() {
         requestHighRefresh()
         Thread({ Trash.purgeExpired(this) }, "SpaceLens-TrashExpire").start()
         setContentView(root)
+        if (com.spacelens.app.BuildConfig.DEBUG) {
+            root.viewTreeObserver.addOnGlobalLayoutListener(
+                    object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+                        override fun onGlobalLayout() {
+                            root.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                            android.util.Log.i("FLCSTART",
+                                    "first_layout=+${android.os.SystemClock.uptimeMillis() - startT1}ms")
+                        }
+                    })
+            root.viewTreeObserver.addOnPreDrawListener(
+                    object : android.view.ViewTreeObserver.OnPreDrawListener {
+                        override fun onPreDraw(): Boolean {
+                            root.viewTreeObserver.removeOnPreDrawListener(this)
+                            android.util.Log.i("FLCSTART",
+                                    "first_draw=+${android.os.SystemClock.uptimeMillis() - startT1}ms")
+                            return true
+                        }
+                    })
+        }
         installInsets()
         applyBreakpoint()
         selectTab(0, animate = false)
@@ -1149,6 +1168,10 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        val resumeAt = android.os.SystemClock.uptimeMillis()
+        if (com.spacelens.app.BuildConfig.DEBUG) {
+            android.util.Log.i("FLCSTART", "resume_start=+${resumeAt - startT1}ms")
+        }
         applyBreakpoint()
         updateMine()
         updateOverview()
@@ -1168,6 +1191,10 @@ class MainActivity : Activity() {
         }
         checkRecvDirFallback()
         syncScanGate()
+        if (com.spacelens.app.BuildConfig.DEBUG) {
+            val end = android.os.SystemClock.uptimeMillis()
+            android.util.Log.i("FLCSTART", "resume_end=${end - resumeAt}ms")
+        }
     }
 
     /** M2：单线程 DFS 扫描内部存储，边扫边更新树图。 */
@@ -1287,7 +1314,7 @@ class MainActivity : Activity() {
                 if (com.spacelens.app.BuildConfig.DEBUG) {
                     val t4 = android.os.SystemClock.uptimeMillis()
                     android.util.Log.i("FLCSTART",
-                            "snapshot_load=${t4 - startT1}ms nodes=${store.count}")
+                            "snap_cb=+${t4 - startT1}ms thread=${Thread.currentThread().name} nodes=${store.count}")
                 }
                 snapshotLoading = false
                 indexLoading = false

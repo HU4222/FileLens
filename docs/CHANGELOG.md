@@ -5,6 +5,9 @@
 
 ---
 
+## 1.5.1 · 2026-11-08
+修 F11：`TreePage.showRoot()` 补 `refreshViews()`，列表模式下面包屑/返回/下钻回根后 adapter 会重建（此前只有树图换根，列表仍挂旧根）。冷启动新增 resume/layout/draw/snap_cb 细打点（仅 Debug）。
+
 ## 1.5.0 · 2026-11-08
 仅 Debug 的诊断脚手架：ControlRegistry 导出当前页控制点（FLCTL）、flTap 按 id 直接触发（tab/crumb/back）；冷启动四段打点（FLCSTART）。不改用户可见行为。
 

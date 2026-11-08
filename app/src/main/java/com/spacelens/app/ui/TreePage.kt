@@ -339,6 +339,7 @@ class TreePage(context: Context) : FrameLayout(context) {
         rootIndex = node
         treemap.setRoot(node)
         top.invalidate()
+        refreshViews()
         onRootChanged?.invoke(node)
     }
 
