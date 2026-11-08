@@ -11,7 +11,7 @@ import android.view.View
 
 enum class Icon {
     OVERVIEW, TREE, GAUGE, USER, FOLDER, SPEED, HEALTH, CHEVRON, SHIELD,
-    MOON, SUN, INFO, TRASH, SEARCH, LIST, RING, BACK, LOCK, CALENDAR, REFRESH, CLOSE,
+    MOON, SUN, INFO, TRASH, SEARCH, LIST, RING, BACK, LOCK, CALENDAR, REFRESH, CLOSE, SETTINGS,
 }
 
 object Draw {
@@ -211,6 +211,17 @@ object Draw {
                     val y1 = 12f + (6.6f * Math.sin(a)).toFloat()
                     val x2 = 12f + (9.5f * Math.cos(a)).toFloat()
                     val y2 = 12f + (9.5f * Math.sin(a)).toFloat()
+                    canvas.drawLine(x1, y1, x2, y2, p)
+                }
+            }
+            Icon.SETTINGS -> {
+                canvas.drawCircle(12f, 12f, 3.2f, p)
+                for (a in 0 until 8) {
+                    val rad = Math.toRadians(a * 45.0)
+                    val x1 = 12f + kotlin.math.cos(rad).toFloat() * 6.2f
+                    val y1 = 12f + kotlin.math.sin(rad).toFloat() * 6.2f
+                    val x2 = 12f + kotlin.math.cos(rad).toFloat() * 9.2f
+                    val y2 = 12f + kotlin.math.sin(rad).toFloat() * 9.2f
                     canvas.drawLine(x1, y1, x2, y2, p)
                 }
             }

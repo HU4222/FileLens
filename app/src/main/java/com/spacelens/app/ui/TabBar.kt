@@ -14,8 +14,8 @@ import kotlin.math.roundToInt
 /** 底部胶囊页签：Canvas 自绘，指示器跟手 + 弹簧收口。 */
 class TabBar(context: Context) : View(context) {
 
-    private val labels = arrayOf("空间", "搜索", "清理", "传输")
-    private val icons = arrayOf(Icon.TREE, Icon.SEARCH, Icon.TRASH, Icon.SHIELD)
+    private val labels = arrayOf("空间", "搜索", "清理", "传输", "设置")
+    private val icons = arrayOf(Icon.TREE, Icon.SEARCH, Icon.TRASH, Icon.SHIELD, Icon.SETTINGS)
 
     var selected: Int = 0
         private set
@@ -99,7 +99,7 @@ class TabBar(context: Context) : View(context) {
             val pressed = pressIndex == i
             val color = Theme.blend(0xFF8F9AB5.toInt(), selectedColor, k)
             val textColor = Theme.blend(0xFF8F9AB5.toInt(), selectedText, k)
-            val size = (20f + 2f * k) * d
+            val size = (18f + 2f * k) * d
             val stroke = (1.5f + 0.5f * k) * d
             val alpha = if (pressed) (255 * pressAlpha).toInt() else 255
             canvas.save()
@@ -112,7 +112,7 @@ class TabBar(context: Context) : View(context) {
                 canvas.drawRoundRect(line, 1f * d, 1f * d,
                         Draw.fill(Theme.alpha(selectedColor, (255 * k).toInt())))
             }
-            val tp = Draw.text(context, 10f, textColor, medium = k > 0.5f)
+            val tp = Draw.text(context, 9.5f, textColor, medium = k > 0.5f)
             tp.alpha = alpha
             val label = labels[i]
             canvas.drawText(label, cx - tp.measureText(label) / 2f,

@@ -42,7 +42,7 @@ class SettingsPage(context: Context) : LinearLayout(context) {
     init {
         orientation = VERTICAL
         setBackgroundColor(Theme.palette.bg)
-        setPadding(dp(18f), dp(10f), dp(18f), dp(18f))
+        setPadding(dp(18f), dp(10f), dp(18f), dp(92f))
 
         val top = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
         top.addView(TextView(context).apply {
@@ -131,6 +131,7 @@ class SettingsPage(context: Context) : LinearLayout(context) {
             setTextColor(Theme.palette.muted)
             setPadding(0, dp(5f), 0, 0)
         }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        card.setOnClickListener { open() }
         val lp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         lp.topMargin = dp(8f)
         parent.addView(card, lp)
@@ -144,7 +145,9 @@ class SettingsPage(context: Context) : LinearLayout(context) {
             row.action.setTextColor(if (yes) Theme.palette.ok else Theme.palette.warn)
         }
         val items = Trash.entries(context)
-        trashLine.text = "回收站 · ${items.size} 项           进入 ›"
+        val bytes = items.sumOf { it.size }
+        trashLine.text = "回收站 · ${items.size} 项 · " +
+                android.text.format.Formatter.formatFileSize(context, bytes) + "           进入 ›"
     }
 
     override fun onAttachedToWindow() {
@@ -179,28 +182,32 @@ class SettingsPage(context: Context) : LinearLayout(context) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
                     PackageManager.PERMISSION_GRANTED
 
-    private fun openAllFiles() {
+    private fun launch(intent: Intent) {
         try {
-            context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                    Uri.parse("package:" + context.packageName)))
-        } catch (_: Throwable) {
-            context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            context.startActivity(intent)
+        } catch (_: android.content.ActivityNotFoundException) {
+            try {
+                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + context.packageName)))
+            } catch (_: Throwable) {
+                // 系统设置也不可用时保持页面，不静默崩溃。
+            }
         }
+    }
+
+    private fun openAllFiles() {
+        launch(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                Uri.parse("package:" + context.packageName)))
     }
 
     private fun openUsage() {
-        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
     }
 
     private fun openNotifications() {
-        try {
-            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-            })
-        } catch (_: Throwable) {
-            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:" + context.packageName)))
-        }
+        launch(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        })
     }
 
     private fun requestCamera() {

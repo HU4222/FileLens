@@ -94,6 +94,7 @@ class MainActivity : Activity() {
     private lateinit var searchPage: SearchPage
     private lateinit var cleanPage: CleanPage
     private lateinit var transferPage: TransferPage
+    private lateinit var settingsPage: SettingsPage
     private lateinit var treeOverlay: FrameLayout
     private lateinit var benchOverlay: FrameLayout
     private var benchRunning = false
@@ -112,12 +113,13 @@ class MainActivity : Activity() {
     private val selection = SelectionState()
     private var detailNode = 0
 
-    private val titles = arrayOf("空间", "搜索", "清理", "传输")
+    private val titles = arrayOf("空间", "搜索", "清理", "传输", "设置")
     private val subtitles = arrayOf(
             "存储总览 · 空间树",
             "只搜内存索引 · 不重扫磁盘",
             "重复文件 · 删除进回收站",
             "本机文件互传",
+            "权限 · 回收站",
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -176,6 +178,9 @@ class MainActivity : Activity() {
         searchPage = SearchPage(this)
         cleanPage = CleanPage(this)
         cleanPage.onTrashClick = { showTrashPage() }
+        settingsPage = SettingsPage(this)
+        settingsPage.onTrash = { showTrashPage() }
+        settingsPage.onClose = { selectTab(if (previousTab in 0..3) previousTab else 0, true) }
         transferPage = TransferPage(this)
         transferPage.onPanelVisibility = { open -> tabBar.isEnabled = !open }
         transferPage.onSheetVisibility = { open ->
@@ -198,6 +203,8 @@ class MainActivity : Activity() {
         pager.addView(cleanPage, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         pager.addView(transferPage, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        pager.addView(settingsPage, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         shell.bind(navRail, topBar, pager, tabBar, detailPane)
@@ -310,7 +317,7 @@ class MainActivity : Activity() {
             cleanPage.onShown()
         }
         overviewPage.onBench = { showBenchOverlay() }
-        overviewPage.onSettings = { showSettingsPage() }
+        overviewPage.onSettings = { selectTab(4, animate = true) }
         overviewPage.onCategory = { category ->
             searchPage.applyTypeFilter(category)
             selectTab(1, animate = true)
@@ -395,7 +402,7 @@ class MainActivity : Activity() {
         hideBenchOverlay()
         updateTopBar(i)
         shell.setTab(i)
-        navRail.setSelected(i)
+        navRail.setSelected(i.coerceIn(0, 3))
         val animateNow = animate && shell.windowClass != WindowClass.MEDIUM
         pager.setCurrent(i, animateNow)
         tabBar.setPage(i, animate)
@@ -407,6 +414,7 @@ class MainActivity : Activity() {
             1 -> searchPage.onShown()
             2 -> cleanPage.onShown()
             3 -> transferPage.onShown()
+            4 -> settingsPage.refresh()
         }
         updateDetail()
     }
@@ -416,7 +424,7 @@ class MainActivity : Activity() {
         visibleTab = index
         updateTopBar(index)
         shell.setTab(index)
-        navRail.setSelected(index)
+        navRail.setSelected(index.coerceIn(0, 3))
         tabBar.finishSwipe(index)
         when (index) {
             0 -> {
@@ -426,6 +434,7 @@ class MainActivity : Activity() {
             1 -> searchPage.onShown()
             2 -> cleanPage.onShown()
             3 -> transferPage.onShown()
+            4 -> settingsPage.refresh()
         }
         updateDetail()
     }
@@ -1490,6 +1499,10 @@ class MainActivity : Activity() {
                 hideTreeOverlay()
                 updateDetail()
             }
+            return
+        }
+        if (pager.currentPage == 4) {
+            selectTab(if (previousTab in 0..3) previousTab else 0, animate = true)
             return
         }
         if (pager.currentPage == 3 && ::transferPage.isInitialized) {
