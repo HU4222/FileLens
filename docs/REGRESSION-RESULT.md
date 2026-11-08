@@ -823,3 +823,39 @@ if (scanner != null) {
 | PASS | 0 |
 | FAIL | 1（F11 仍未通过） |
 | NOT RUN | Tx 边界、57、59、51 |
+
+---
+
+# 第二十一轮（1.4.2，基线 35bc895）
+
+## F11 状态
+
+`FIXED-UNVERIFIED`：`35bc895` 已把面包屑命中优先于返回箭头，并收小 `backRect`；但列表模式下点击面包屑仍无响应，界面验收未通过。按决定本轮不再碰树图。
+
+## 搜索 20–27
+
+| # | 结果 | 证据 |
+|---|---|---|
+| 20 名字搜索 | PASS | 输入 `ui` → 「找到 31 项」，结果第二行 `21.0 KB · 内部存储`（大小 · 目录） |
+| 21 后缀 `.png` | PASS | 输入 `.png` → 「找到 60 项」；抽查 13 行结果全部 `.png` 结尾，无 `.txt` 混入 |
+| 22 路径 `DCIM/` | **FAIL（F12）** | 输入 `DCIM/` → 「找到 7 项」，但第一条是 `huge.jpg`，目录行是 `Android/media/com.hu4222.filelens/trash/.../DCIM/Camera`——**回收站里的旧 DCIM 路径也被算进结果**，不是“只在 /DCIM 下” |
+| 23 大小四档 | NOT RUN | 时间用尽；边界文件已造：`s1 512K`、`s2 1.0MB`、`s3 2MB`、`s4 50MB` |
+| 24 时间三档 | NOT RUN | — |
+| 25 排序 | NOT RUN | — |
+| 26 空态两种 | NOT RUN | — |
+| 27 长按菜单 | NOT RUN | — |
+
+F12 根因（已确认）：`SearchPage` 的 PATH 模式用 `absolutePathOf(...).contains(q)`，回收站目录在 `/sdcard/Android/media/<pkg>/trash/...` 下，原路径里仍带 `DCIM/`，所以被命中。修法应是“只匹配相对路径（去掉 trash 前缀）”或在 PATH 模式排除 `Android/media/*/trash`。
+
+## 清理 28–33
+
+NOT RUN（时间用尽）。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 2（20、21） |
+| FAIL | 1（22 → F12） |
+| NOT RUN | 23–27、清理 6 条 |
+| 挂起 | F11（FIXED-UNVERIFIED） |
