@@ -87,6 +87,7 @@ class MainActivity : Activity() {
     private lateinit var detailPane: DetailPane
     private lateinit var fpsHud: FpsHudView
     private lateinit var undoBar: android.widget.TextView
+    private lateinit var undoLayer: FrameLayout
     private var lastTrashBatch: String? = null
     @Volatile private var deleteCancelled = false
     private val undoHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -237,6 +238,11 @@ class MainActivity : Activity() {
         hudLp.topMargin = (80 * resources.displayMetrics.density).toInt()
         hudLp.rightMargin = (12 * resources.displayMetrics.density).toInt()
         root.addView(fpsHud, hudLp)
+        undoLayer = FrameLayout(this).apply {
+            isClickable = true
+            elevation = 24f * resources.displayMetrics.density
+            visibility = View.GONE
+        }
         undoBar = android.widget.TextView(this).apply {
             textSize = 11f
             setTextColor(Theme.palette.text)
@@ -248,24 +254,18 @@ class MainActivity : Activity() {
                 setColor(Theme.palette.brandSoft)
                 setStroke((1 * resources.displayMetrics.density).toInt().coerceAtLeast(1), Theme.palette.brand)
             }
-            visibility = View.GONE
-            setOnClickListener {
-                val action = pendingUndo
-                if (action != null) {
-                    pendingUndo = null
-                    undoHandler.removeCallbacksAndMessages(null)
-                    undoBar.visibility = View.GONE
-                    action.invoke()
-                } else {
-                    undoDelete()
-                }
-            }
+            isClickable = true
+            setOnClickListener { runPendingUndo() }
         }
+        undoLayer.addView(undoBar, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        // 独立浮层：最后添加 + 显示时 bringToFront，保证在 pager/TabBar 之上并自己吃触摸。
+        undoLayer.setOnClickListener { runPendingUndo() }
         val undoLp = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT)
         undoLp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         undoLp.bottomMargin = (120 * resources.displayMetrics.density).toInt()
-        root.addView(undoBar, undoLp)
+        root.addView(undoLayer, undoLp)
 
         // 空间树保留为「空间」页内的全屏二级页，不占第 5 个 Tab。
         treeOverlay = FrameLayout(this).apply {
@@ -1433,27 +1433,57 @@ class MainActivity : Activity() {
     }
 
     private fun showUndoBar() {
-        hideImeForUndo()
-        undoHandler.removeCallbacksAndMessages(null)
         pendingUndo = null
-        undoBar.bringToFront()
-        undoBar.text = "已移入回收站 · 撤销"
-        undoBar.visibility = View.VISIBLE
-        undoHandler.postDelayed({ undoBar.visibility = View.GONE }, 5000L)
+        showUndoLayer("已移入回收站 · 撤销")
     }
 
     /** 1.4.1：改名/移动的 5 秒撤销条，复用回收站那条。 */
     private fun showActionUndo(text: String, action: () -> Unit) {
-        hideImeForUndo()
-        undoBar.bringToFront()
-        undoHandler.removeCallbacksAndMessages(null)
         pendingUndo = action
+        showUndoLayer(text)
+    }
+
+    /** 全局浮层：TabBar 顶边上方 16dp，动态计算。 */
+    private fun showUndoLayer(text: String) {
+        hideImeForUndo()
+        undoHandler.removeCallbacksAndMessages(null)
         undoBar.text = text
-        undoBar.visibility = View.VISIBLE
-        undoHandler.postDelayed({
-            undoBar.visibility = View.GONE
-            pendingUndo = null
-        }, 5000L)
+        undoLayer.visibility = View.VISIBLE
+        undoLayer.bringToFront()
+        placeUndoLayer()
+        root.post { placeUndoLayer() }
+        val d = resources.displayMetrics.density
+        undoBar.alpha = 0f
+        undoBar.translationY = 12f * d
+        undoBar.animate().alpha(1f).translationY(0f).setDuration(150L).start()
+        undoHandler.postDelayed({ hideUndoLayer() }, 5000L)
+    }
+
+    private fun placeUndoLayer() {
+        if (undoLayer.visibility != View.VISIBLE || root.height == 0) return
+        val loc = IntArray(2)
+        tabBar.getLocationInWindow(loc)
+        val rootLoc = IntArray(2)
+        root.getLocationInWindow(rootLoc)
+        val tabTop = loc[1] - rootLoc[1]
+        val d = resources.displayMetrics.density
+        val lp = undoLayer.layoutParams as FrameLayout.LayoutParams
+        lp.bottomMargin = (root.height - tabTop + (16 * d).toInt()).coerceAtLeast((16 * d).toInt())
+        undoLayer.layoutParams = lp
+    }
+
+    private fun hideUndoLayer() {
+        undoHandler.removeCallbacksAndMessages(null)
+        val d = resources.displayMetrics.density
+        undoBar.animate().alpha(0f).translationY(12f * d).setDuration(120L)
+                .withEndAction { undoLayer.visibility = View.GONE }.start()
+    }
+
+    private fun runPendingUndo() {
+        val action = pendingUndo
+        pendingUndo = null
+        hideUndoLayer()
+        if (action != null) action.invoke() else undoDelete()
     }
 
     /** 撤销条画在 Activity 底部，键盘弹着时会被盖住；弹条前先收键盘。 */
@@ -1470,7 +1500,7 @@ class MainActivity : Activity() {
 
     private fun undoDelete() {
         val batch = lastTrashBatch ?: return
-        undoBar.visibility = View.GONE
+        hideUndoLayer()
         Thread({
             var n = 0
             for (e in Trash.entries(this)) {
