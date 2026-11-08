@@ -180,6 +180,97 @@ def wait_page(page, timeout=5.0):
     return last
 
 
+def sig(ui):
+    return tuple((n["text"], n["x1"], n["y1"], n["x2"], n["y2"], n["cls"]) for n in ui.nodes)
+
+
+def stable_dump(timeout=5.0):
+    """连续两次 dump 完全一致才返回；布局在动就继续等。"""
+    end = time.time() + timeout
+    prev = None
+    prev_key = None
+    while time.time() < end:
+        cur = dump()
+        key = sig(cur)
+        if prev_key is not None and key == prev_key:
+            return cur
+        prev, prev_key = cur, key
+        time.sleep(0.3)
+    raise RuntimeError("布局 5s 内没有稳定（dump 两次不一致）")
+
+
+def clickable_texts(ui):
+    return sorted({n["text"] for n in ui.nodes if n["text"] and n["clickable"]})
+
+
+def pick(ui, text):
+    exact = ui.find(text, exact=True)
+    cands = exact or ui.find(text)
+    if not cands:
+        print("FAIL: 找不到 %r；当前可点文本：%s" % (text, "、".join(clickable_texts(ui)) or "（无）"))
+        print(ui.status())
+        sys.exit(1)
+    cands.sort(key=lambda n: (n["x2"] - n["x1"]) * (n["y2"] - n["y1"]), reverse=True)
+    if len(cands) > 1:
+        print("WARN: %r 匹配 %d 个节点，取 bounds 最大的 %s"
+              % (text, len(cands), [n["text"] for n in cands[:3]]))
+    return cands[0]
+
+
+def expect_ok(ui, gone, text):
+    if gone is not None and ui.find(gone):
+        return False
+    if text is not None and not ui.find(text):
+        return False
+    return True
+
+
+def do_click(args, kind):
+    hide_keyboard()
+    for attempt in (1, 2):
+        try:
+            ui = stable_dump()
+        except Exception as e:
+            fail(str(e))
+        n = pick(ui, args.text)
+        x, y = center(n)
+        if kind == "tap":
+            tap(x, y)
+        else:
+            shell("input swipe %d %d %d %d %d" % (x, y, x, y, args.ms))
+        end = time.time() + 0.8
+        after = ui
+        while time.time() < end:
+            time.sleep(0.2)
+            try:
+                after = dump()
+            except Exception:
+                continue
+        ok = expect_ok(after, args.expect_gone, args.expect_text)
+        print("%s %r (%d,%d) attempt=%d expect=%s" % (
+            kind, args.text, x, y, attempt,
+            "gone:" + args.expect_gone if args.expect_gone else
+            ("text:" + args.expect_text if args.expect_text else "none")))
+        if ok:
+            print("OK %s %r" % (kind, args.text))
+            return
+        print("WARN: 点击后状态未变化，重试")
+        try:
+            hide_keyboard()
+            time.sleep(0.3)
+        except Exception:
+            pass
+    fail("点击后状态未变化（两次）：%r" % args.text)
+
+
+def cmd_tap_text(args):
+    do_click(args, "tap")
+
+
+def cmd_long_press(args):
+    do_click(args, "long-press")
+
+
 def cmd_restart(args):
     shell("am force-stop %s" % PKG, check=False)
     time.sleep(0.2)
@@ -228,30 +319,6 @@ def cmd_wait_text(args):
     fail("wait-text %r 超时 %ss（自绘页面没有文本节点）" % (args.text, args.seconds), last)
 
 
-def cmd_tap_text(args):
-    hide_keyboard()
-    ui = dump()
-    nodes = ui.find(args.text, exact=True) or ui.find(args.text)
-    if not nodes:
-        fail("tap-text 找不到 %r（自绘页面没有文本节点）" % args.text, ui)
-    nodes.sort(key=lambda n: (n["x2"] - n["x1"]) * (n["y2"] - n["y1"]))
-    x, y = center(nodes[0])
-    tap(x, y)
-    print("OK tap-text %r (%d,%d)" % (args.text, x, y))
-
-
-def cmd_long_text(args):
-    hide_keyboard()
-    ui = dump()
-    nodes = ui.find(args.text, exact=True) or ui.find(args.text)
-    if not nodes:
-        fail("long-text 找不到 %r" % args.text, ui)
-    nodes.sort(key=lambda n: (n["x2"] - n["x1"]) * (n["y2"] - n["y1"]))
-    x, y = center(nodes[0])
-    shell("input swipe %d %d %d %d %d" % (x, y, x, y, args.ms))
-    print("OK long-text %r (%d,%d) %dms" % (args.text, x, y, args.ms))
-
-
 def cmd_shot(args):
     SHOT_DIR.mkdir(parents=True, exist_ok=True)
     path = SHOT_DIR / (args.name + ".png")
@@ -284,12 +351,23 @@ def main():
 
     p = sub.add_parser("tap-text")
     p.add_argument("text")
+    p.add_argument("--expect-gone", default=None)
+    p.add_argument("--expect-text", default=None)
     p.set_defaults(fn=cmd_tap_text)
 
-    p = sub.add_parser("long-text")
+    p = sub.add_parser("long-press")
+    p.add_argument("text")
+    p.add_argument("ms", nargs="?", type=int, default=800)
+    p.add_argument("--expect-gone", default=None)
+    p.add_argument("--expect-text", default=None)
+    p.set_defaults(fn=cmd_long_press)
+
+    p = sub.add_parser("long-text")   # 兼容上一轮脚本
     p.add_argument("text")
     p.add_argument("ms", nargs="?", type=int, default=900)
-    p.set_defaults(fn=cmd_long_text)
+    p.add_argument("--expect-gone", default=None)
+    p.add_argument("--expect-text", default=None)
+    p.set_defaults(fn=cmd_long_press)
 
     p = sub.add_parser("shot")
     p.add_argument("name")
