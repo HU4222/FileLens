@@ -224,7 +224,6 @@ class TransferPage(context: Context) : FrameLayout(context) {
                     super.onPageFinished(view, url)
                     injectEmbedCss(view)
                     injectViewBridge(view)
-                    if (TransferService.running) injectLocalCard()
                 }
             }
             webChromeClient = object : WebChromeClient() {
@@ -664,6 +663,11 @@ class TransferPage(context: Context) : FrameLayout(context) {
               var s=document.createElement('style');s.id='dl-embed-style';
               s.textContent='.nav{display:none!important}.topbar{display:none!important}.views{padding-top:8px!important}';
               document.head.appendChild(s);
+              if(location.hostname==='127.0.0.1'||location.hostname==='localhost'){
+                var h=document.getElementById('dl-hide-local-download');
+                if(!h){h=document.createElement('style');h.id='dl-hide-local-download';document.head.appendChild(h);}
+                h.textContent='[data-act="download"],[data-act="sheetDownload"]{display:none!important}';
+              }
             })();
         """.trimIndent()
         view?.evaluateJavascript(js, null)
@@ -705,6 +709,15 @@ class TransferPage(context: Context) : FrameLayout(context) {
               new MutationObserver(check).observe(document.body,
                 {attributes:true,subtree:true,attributeFilter:['class','style']});
               setInterval(check,300);
+            })();
+            (function(){
+              if(window.__flScanHooked)return; window.__flScanHooked=true;
+              document.addEventListener('click',function(ev){
+                var b=ev.target.closest&&ev.target.closest('[data-act="scanConnect"]');
+                if(!b)return;
+                ev.preventDefault();ev.stopPropagation();ev.stopImmediatePropagation();
+                try{window.__dlNative.scanQr()}catch(e){}
+              },true);
             })();
         """.trimIndent()
         view?.evaluateJavascript(js, null)
@@ -859,56 +872,12 @@ class TransferPage(context: Context) : FrameLayout(context) {
     }
 
     private fun openAbout() {
+        // 保留网页原有的「让对端连接」组件，不再注入第二张卡片。
         web.evaluateJavascript(
                 "if(window.__dlSwitchView)__dlSwitchView('about');" +
                         "document.querySelector('[data-view=\"about\"]')?.click();" +
-                        "setTimeout(function(){var e=document.getElementById('dl-local-card');" +
+                        "setTimeout(function(){var e=document.querySelector('#aboutBody .card');" +
                         "if(e)e.scrollIntoView({block:'start'});},120);", null)
-        handler.postDelayed({ injectLocalCard() }, 180L)
-    }
-
-    private fun injectLocalCard() {
-        if (!TransferService.running) return
-        val js = """
-            (function(){
-              var host='';
-              try{host=window.__dlNative&&window.__dlNative.lanUrl?window.__dlNative.lanUrl():'';}catch(e){}
-              var pin='';
-              try{pin=window.__dlNative&&window.__dlNative.pin?window.__dlNative.pin():'';}catch(e){}
-              var noWifi=!host;
-              var shown=noWifi?'未连接 Wi-Fi':host;
-              var el=document.getElementById('dl-local-card');
-              if(!el){
-                el=document.createElement('div'); el.id='dl-local-card'; el.className='card';
-                var body=document.getElementById('aboutBody');
-                if(body) body.insertBefore(el,body.firstChild);
-              }
-              el.innerHTML='<div class="card-title">本机连接信息</div>'+
-                '<div class="mono" style="font-size:15px;word-break:break-all">'+shown+'</div>'+
-                '<div style="margin-top:6px;color:#8b93a7">配对码 <b style="letter-spacing:2px">'+pin+'</b></div>'+
-                (noWifi?'':'<img src="/qr.png?text='+encodeURIComponent(host)+'" style="width:180px;height:180px;margin:10px auto;display:block;border-radius:8px">')+
-                '<button class="btn btn-primary" '+(noWifi?'disabled ':'')+'onclick="navigator.clipboard.writeText(\''+host+'\')">复制地址</button> '+
-                '<button class="btn" onclick="__dlNative.scanQr()">扫码连接</button> '+
-                '<button class="btn btn-danger" onclick="__dlNative.stopService()">停止服务</button>';
-              var body=document.getElementById('aboutBody');
-              if(body){
-                var hs=body.querySelectorAll('h3');
-                for(var i=0;i<hs.length;i++){
-                  if(/让对端连接|对端连接方式/.test(hs[i].textContent)){
-                    var sec=hs[i].closest('.card')||hs[i].parentElement;
-                    if(sec&&sec.id!=='dl-local-card') sec.remove();
-                    break;
-                  }
-                }
-              }
-              if(location.hostname==='127.0.0.1'||location.hostname==='localhost'){
-                var st=document.getElementById('dl-hide-local-download');
-                if(!st){st=document.createElement('style');st.id='dl-hide-local-download';document.head.appendChild(st);}
-                st.textContent='[data-act="download"]{display:none!important}';
-              }
-            })();
-        """.trimIndent()
-        web.evaluateJavascript(js, null)
     }
 
     private fun scanQr() {
@@ -929,12 +898,9 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 if (!ok) {
                     toast("不是有效的连接码")
                 } else {
-                    web.evaluateJavascript(
-                            "(function(){var u=${org.json.JSONObject.quote(text)};" +
-                                    "var i=document.querySelector('#peerUrl,#url,input[type=url]');" +
-                                    "if(i){i.value=u;i.dispatchEvent(new Event('input',{bubbles:true}));}" +
-                                    "var b=Array.from(document.querySelectorAll('button')).find(function(x){return /连接/.test(x.textContent);});" +
-                                    "if(b)b.click();})();", null)
+                    // 原「让对端连接」的扫码逻辑是跳转到扫到的地址；这里保持同样行为。
+                    toast("扫码成功，正在连接…")
+                    web.loadUrl(text)
                 }
             }
             return
