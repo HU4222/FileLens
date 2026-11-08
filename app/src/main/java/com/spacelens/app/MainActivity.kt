@@ -417,6 +417,7 @@ class MainActivity : Activity() {
             0 -> {
                 overviewPage.refreshStorage()
                 overviewPage.onShown()
+                syncScanGate()
             }
             1 -> searchPage.onShown()
             2 -> cleanPage.onShown()
@@ -437,6 +438,7 @@ class MainActivity : Activity() {
             0 -> {
                 overviewPage.refreshStorage()
                 overviewPage.onShown()
+                syncScanGate()
             }
             1 -> searchPage.onShown()
             2 -> cleanPage.onShown()
@@ -687,6 +689,12 @@ class MainActivity : Activity() {
 
     private fun hasAnyAccess(): Boolean = hasReadAccess() || prefs.safUri != null
 
+    /** 提示条的可见性只跟真实权限走，不跟「有没有点过扫描」走。 */
+    private fun syncScanGate() {
+        if (hasAnyAccess()) overviewPage.hideScanPermissionGate()
+        else overviewPage.showScanPermissionGate()
+    }
+
     private fun requestScan() {
         if (hasAnyAccess()) {
             startScan()
@@ -810,6 +818,7 @@ class MainActivity : Activity() {
                 showFallback()
             }
         }
+        syncScanGate()
     }
 
     /** M2：单线程 DFS 扫描内部存储，边扫边更新树图。 */
