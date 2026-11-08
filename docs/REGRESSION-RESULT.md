@@ -859,3 +859,36 @@ NOT RUN（时间用尽）。
 | FAIL | 1（22 → F12） |
 | NOT RUN | 23–27、清理 6 条 |
 | 挂起 | F11（FIXED-UNVERIFIED） |
+
+---
+
+# 第二十二轮（1.4.2，基线 3125711）
+
+## F12 修了：用 A（回收站整棵子树不进索引）
+
+**先确认回收站页不依赖 NodeStore**：`showTrash()` 用的是 `Trash.entries(context)`（直接读 `/sdcard/Android/media/<pkg>/trash` 文件系统），`SystemTrash.entries()` 走 MediaStore；**都不读 NodeStore**，所以扫描阶段排除回收站是安全的。
+
+改动（`Scanner`）：
+- `run()` 每弹出一个目录先判 `isOwnTrash(path)`：路径同时包含 `/Android/media/` 和 `/com.hu4222.filelens/trash` 就跳过（不 mark DENIED，只 publish 后 continue）；
+- 新增 `isOwnTrash()` 辅助函数。
+
+验收（实跑）：
+- 重装后点「重新扫描」，logcat 正常完成；
+- 搜 `DCIM/`：**「找到 5 项」，全是 `DCIM/Camera` 活文件**（normal.jpg / normal_backup.jpg / broken.jpg / image.webp？/ fake.jpg），**不再出现回收站里的 `huge.jpg`**；
+- 回收站页仍正常：`回收站` 列表里 `normal.jpg`、`huge.jpg` 都在，带「恢复」按钮（`.tmp/emu/` dump `f2.xml`）。
+- 空间统计：回收站子树不再进 store，自然会从已用容量里排除（未单独记前后数字）。
+
+结论：**F12 PASS（A 方案）**。
+
+## 搜索 23–27 / 清理 28–33
+
+NOT RUN（本轮时间全给 F12 的改动与验证）。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 1（F12） |
+| FAIL | 0 |
+| NOT RUN | 搜索 23–27、清理 28–33 |
+| 挂起 | F11（FIXED-UNVERIFIED） |

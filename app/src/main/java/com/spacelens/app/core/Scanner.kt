@@ -69,6 +69,11 @@ class Scanner(
 
         while (stack.isNotEmpty() && !stop.get()) {
             val task = stack.pop()
+            // 回收站整棵子树不进索引：否则删掉的文件还能被搜索/统计到。
+            if (isOwnTrash(task.dir.absolutePath)) {
+                publish(task.dir.absolutePath, force = false)
+                continue
+            }
             if (Classifier.restrictedPath(task.dir.absolutePath)) {
                 store.markFlag(task.node, NodeStore.DENIED)
                 denied++
@@ -172,6 +177,9 @@ class Scanner(
         )
         main.post { listener.onProgress(progress) }
     }
+
+    private fun isOwnTrash(path: String): Boolean =
+            path.contains("/Android/media/") && path.contains("/com.hu4222.filelens/trash")
 
     private fun isSymlink(path: String): Boolean = try {
         val st = Os.lstat(path)
