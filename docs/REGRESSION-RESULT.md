@@ -1,4 +1,27 @@
 
+## 补充：F11 的代码核对结论（第 29 轮后）
+
+`35bc895` 之后 `TreePage.hit()` 的实际实现已核对：
+
+```kotlin
+if (scanRect.contains(x, y)) return 0
+for (rect in crumbRects.values) if (rect.contains(x, y)) return 2   // 面包屑优先
+if (backRect.contains(x, y) && rootIndex != 0) return 1            // 返回箭头退后
+```
+
+且 `backRect` 几何已收进卡片内（`left+6d .. left+42d`、`centerY-18d .. root.bottom-2d`），
+不再延伸进面包屑所在的那一行（面包屑矩形从 `root.bottom-5d` 起）。
+
+**结论：命中冲突已在代码层修正（`PASS(代码核对)`），界面验收仍缺。**
+但树图存在更上游的问题：**难以稳定进入目标目录**，这条才是 Tx / 57 无法验证的真正原因。
+
+### 受 F11 阻塞、无法验证的条目
+
+| # | 条目 | 阻塞原因 |
+|---|---|---|
+| Tx | `T` 移到 `Tx` 必须允许 | 需要树图长按 + 移动选择器，进不去树图 |
+| 57 | 新建文件夹 | 同上 |
+
 ## 最终统计（截至 1.4.2 / 第 27 轮）
 
 - **PASS：约 60 / 64**
