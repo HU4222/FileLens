@@ -797,3 +797,29 @@ if (scanner != null) {
 | FAIL | 0 |
 | BLOCKED | 1（F11，日志未取到） |
 | NOT RUN | 56 的 Tx 边界、57、59、51 |
+
+---
+
+# 第二十轮（1.4.2，基线 f84cf04）
+
+## F11 修法（A+B）已落地，但实测面包屑仍不动（BLOCKED）
+
+代码改动（`TreePage`）：
+- **A 命中优先级**：`hit()` 里把 `crumbRects` 判定提到 `backRect` 之前；
+- **B 几何**：`backRect` 收进 root 卡片内部（`left+6d`、`bottom-2d`、`centerY±18d`），不再伸进面包屑行。
+
+实测：
+- 下钻到 `FileLensTest`（截图 `r20-level3.png`，顶栏/面包屑显示正确：`内部存储 / Download / FileLensTest`）；
+- 在 x=120 上依次点 y=242、250、258、266、270、300、320、340，**列表始终停在 `k1.apk`**，面包屑没有触发跳转；
+- 也没抓到返回箭头效果（同一区域）。
+- 说明：**触摸没有进入 TreePage 的 crumb 命中路径**，不是 A/B 两个修法能覆盖的问题；可能列表模式下头部 canvas 被 ListView/滚动容器截走，或 `crumbRects` 在列表模式下未重建。
+
+结论：`BLOCKED(面包屑在列表模式下点击无响应，已确认坐标覆盖了面包屑文字行)`。A+B 保留（方向正确），但 F11 未验收通过。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 0 |
+| FAIL | 1（F11 仍未通过） |
+| NOT RUN | Tx 边界、57、59、51 |

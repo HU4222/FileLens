@@ -429,8 +429,8 @@ class TreePage(context: Context) : FrameLayout(context) {
             val s = store
             val drilled = s != null && rootIndex != 0
             if (drilled) {
-                backRect.set(root.left + 2f * d, root.centerY() - 22f * d,
-                        root.left + 46f * d, root.centerY() + 22f * d)
+                backRect.set(root.left + 6f * d, root.centerY() - 18f * d,
+                        root.left + 42f * d, root.bottom - 2f * d)
                 if (pressed == 1) canvas.drawCircle(backRect.centerX(), backRect.centerY(), 16f * d,
                         Draw.fill(Theme.alpha(p.brand, 18)))
                 Draw.icon(canvas, Icon.BACK, backRect.centerX(), backRect.centerY(), 17f * d, p.text, 2f * d)
@@ -590,8 +590,9 @@ class TreePage(context: Context) : FrameLayout(context) {
 
         private fun hit(x: Float, y: Float): Int {
             if (scanRect.contains(x, y)) return 0
-            if (backRect.contains(x, y) && store?.let { rootIndex != 0 } == true) return 1
+            // 面包屑优先：它和返回箭头在左上角相邻，先判箭头会把第一段吃掉。
             for (rect in crumbRects.values) if (rect.contains(x, y)) return 2
+            if (backRect.contains(x, y) && store?.let { rootIndex != 0 } == true) return 1
             if (chipRects[0].contains(x, y)) return 5
             if (chipRects[1].contains(x, y)) return 3
             if (chipRects[2].contains(x, y)) return 6
