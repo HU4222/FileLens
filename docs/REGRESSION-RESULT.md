@@ -653,3 +653,40 @@ NOT RUN（本轮全部时间用于 56）。
 | FAIL | 0 |
 | BLOCKED | 1（56） |
 | NOT RUN | 57、58 |
+
+---
+
+# 第十六轮（1.4.2，基线 01653ca）
+
+## 「重扫看不到新建目录」→ 未定位、未修（BLOCKED）
+
+本轮尝试按三步排查，但环境/坐标问题反复把 App 切到后台，**没有拿到可判定的事实**，所以不写根因结论：
+
+已确认的事实：
+1. `T` 目录在磁盘上（`ls -R` 可见 `T/a.txt`、`T/x/b.txt`），上一轮 `before.txt` 已保存。
+2. 树图列表 `Download/FileLensTest` 只有 6 行，无 `T`；头部计数是「7 文件」。
+3. 清空 logcat 后点树图顶栏 (900,100) 并等 8 秒，**logcat 里没有任何 `SpaceLens`/scan/snapshot 日志** → 至少这一次点击没有触发扫描。
+4. 随后截图显示 App 已被切到系统「Bluetooth - App info」页面（点击坐标落到了系统设置），后续排查无法继续。
+
+未确认（所以不下结论）：
+- 扫描器是否真的会漏掉 `Download/FileLensTest/T`；
+- 是否存在「重扫先读快照」的顺序问题（从 `startScan()` 代码看是 `store.reset()` 后直接 `Scanner`，没有先加载快照，但未实跑证实）；
+- 重扫按钮的真实可点区域。
+
+结论：`BLOCKED(本轮未拿到扫描触发/扫描结果的日志证据，诊断被坐标与系统页面打断)`。**没有修，56 仍然未验。**
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 0 |
+| FAIL | 0 |
+| BLOCKED | 1（重扫诊断） |
+| 未做 | 56、57、58 |
+
+## 下一步（必须照做）
+
+不要再用盲坐标点「重扫」。下一轮改用：
+1. `adb shell am force-stop` + 冷启动，确认 `mCurrentFocus` 是 `MainActivity`；
+2. 用 logcat 断言扫描开始/结束（`SpaceLens` tag），再判断按钮是否触发；
+3. 若日志无扫描记录，直接查 `OverviewPage`/`TreePage` 的 `重扫` 触摸区域代码（`hit()` / `onTouchEvent`），不再靠点。
