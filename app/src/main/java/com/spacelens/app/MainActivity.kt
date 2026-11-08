@@ -1523,7 +1523,7 @@ class MainActivity : Activity() {
                 }
                 treePage.refreshTree()
                 searchPage.refreshNow()
-                cleanPage.reset()
+                cleanPage.refreshDuplicates()
                 updateOverview()
                 updateDetail()
                 updateMine()

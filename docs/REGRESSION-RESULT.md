@@ -407,3 +407,50 @@ R3 相册/系统回收站、R4 预览删除 + #50、空间页 #15/#19：**NOT RU
 | NOT RUN | R3、R4、空间 #15/#19 |
 
 新缺陷候选：**F9 清理页删除/撤销后「0 组」与磁盘文件不一致**。
+
+
+---
+
+# 第九轮（1.4.2，基线 8f66a28）
+
+## A. F9（撤销后清理页 0 组）→ PASS
+
+根因：undoDelete() 调的是 cleanPage.reset()，它只清空 groups 并 started=false，不会重算；页面于是显示「0 组」，而磁盘文件已恢复。
+
+修复：
+- CleanPage.refreshDuplicates()：
+eset() 后，若当前是重复文件段就 startScan() 重算（只用 store + 磁盘 SHA-256，不做全盘扫描）；
+- undoDelete() 改调 
+efreshDuplicates()。
+
+验证（清理页）：
+- 删除选中 → 确认 → 撤销；
+- 撤销后 ssert-page 清理 **通过**（不跳页）；
+- 页面恢复「重复文件 · 4 组 · 78.0 MB」，第 1 组 13 份（pp_1 keeper + pp_22/app_23/k1/k2/k3/...），与磁盘一致：.tmp/emu/r9-after-undo.png；
+- md5sum app_22.apk 与 k1.apk 均为 5f363e0e58a95f06cbe9bbc662c5dfb6，与删除前一致。
+
+## B. 空间页 #15：树图连点 5 次 → PASS
+
+- 先 goto 空间，下滑到「快捷入口」点「空间树」，确认树图首帧（.tmp/emu/r9-tree.png）；
+- 对大块连点 5 次，每次截图 
+9-tree-1..5.png；
+- 进程存活（pid 2576），crash buffer 无本应用记录；
+- 5 次点击逐层下钻到 照片/2024 并弹出文件详情（
+9-tree-5.png），面包屑与层级一致，无错位/半动画。
+
+## C. 空间页 #19：滚到底 → PASS（视觉；精确比例受自绘页限制）
+
+- 退出树图后连续上滑到空间页底部，最后一项是版本脚注「文件管家 v1.4.2 · HU4222」，完整可见、未被底栏遮挡：.tmp/emu/r9-space-last.png。
+- 说明：空间页是自绘 Canvas + 原生 ScrollView，无法注入 JS 读 scrollTop/scrollHeight；本轮以「上滑到不再滚动 + 截图最后一项完整」为准，**精确比例未取到**。
+
+## R3 / R4
+
+NOT RUN（本轮时间用尽）。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 3（F9、#15、#19） |
+| FAIL | 0 |
+| NOT RUN | R3、R4（+ 传输页 34–39） |

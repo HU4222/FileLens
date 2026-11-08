@@ -720,8 +720,13 @@ class CleanPage(context: Context) : LinearLayout(context) {
         if (segment == 0 && !running) startScan()
     }
 
-    fun reset() {
-        generation++
+    /** 撤销删除后：清缓存并重算重复分组（只算 store 内文件，不做全盘扫描）。 */
+    fun refreshDuplicates() {
+        reset()
+        if (segment == 0) startScan()
+    }
+
+    fun reset() {        generation++
         cancelFlag = true
         running = false
         started = false
