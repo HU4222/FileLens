@@ -1,7 +1,7 @@
 # FileLens 交接文件（新会话先读这个）
 
 > 读这一份 ≈ 3 千 token；翻聊天记录 ≈ 38 万。
-> 最后更新：2026-11-08 12:05
+> 最后更新：2026-11-08 12:20
 
 ---
 
@@ -28,14 +28,24 @@ JDK        C:\Program Files\Java\jdk-17
 ## 三、当前版本与状态
 
 ```
-当前版本   1.3.9 / versionCode 21（自测：build 通过、模拟器冷启动不崩、空间页能开；
-                                   权限提示随真实权限开关；真机未验，手机离线）
+当前版本   1.3.10 / versionCode 22（只加模拟器验证脚本，无业务行为变化；真机未验）
 已验证版本 1.3.7 / versionCode 19（真机验过：齿轮 ✅ Shizuku 隐藏 ✅ 树图下钻 ✅
                                    六位配对码 ✅ 局域网地址 ✅ 扫码拉起相机 ✅ 本机浏览无下载按钮 ✅）
-最近提交   e2ed8c2 chore(release): bump to 1.3.9
-           8154e65 fix(space): reserve room for the scan permission gate
-           3834899 fix(space): bind scan permission gate to real access
+最近提交   13febe9 chore(release): bump to 1.3.10
+           ecb6ac5 docs: add emulator verification guide
+           b196e73 tools: add emulator verification CLI
 ```
+
+### 1.3.10 新增（新会话按这里查）
+
+| 文件 | 用途 |
+|---|---|
+| `tools/emu.py` | 模拟器验证 CLI（status/start/stop/launch/install/shot/tap/swipe/key/perm/logcat/wait）；路径与端口集中在顶部 `CONFIG` |
+| `docs/EMU-VERIFY.md` | 使用说明、三条常用组合、1.3.9 验证范本、常见失败 |
+
+模拟器：AVD `spacelens_api34`，序列号 `emulator-5556`，adb 端口 5038。
+自测已真跑：status（停/跑）、start、install（1.3.10 / 22）、shot（1080x2340）、
+`perm allfiles deny` + launch 见提示、`perm reset` + launch 提示消失、stop（emu kill 无效时走 reboot -p，17s 完成）。
 
 ### 1.3.9 两处落点（新会话按这里查）
 
@@ -93,8 +103,14 @@ P1-1（底部被胶囊遮挡）真机实测不成立：`.views` 已有 134px 内
 
 ## 四、下一步
 
-1.3.9 两处已实现，等待用户真机验收；本开发会话到此停止，不接新任务。
-新会话先按「三、1.3.9 两处落点」核对代码，再按用户新任务书继续。
+1.3.10 已完成（只加脚本与文档），等 1.4.0 任务书；本开发会话到此停止，不接新任务。
+新会话先读 `docs\EMU-VERIFY.md` 用模拟器验，再按任务书继续。
+
+### 已定顺序（等任务书，别提前动）
+- 1.4.0 搜索增强（路径/后缀/大小区间）+ 崩溃日志本地留存
+- 1.4.1 原生文件操作最小集（重命名 / 移动 / 新建文件夹）
+- 1.4.2 SAF 基础设施 + 自定义传输接收目录
+- 1.4.3 SAF 目录扫描 / 浏览 / 删除接入（依赖 1.4.2，顺序不能换）
 
 ### 更后面的（没排期，等用户定）
 - 照片清理（方案在 `docs/PHOTO-CLEAN-PLAN.md`，P1 一周）
@@ -123,6 +139,7 @@ P1-1（底部被胶囊遮挡）真机实测不成立：`.views` 已有 134px 内
 ```
 docs\DECISIONS.md          决策与否决理由
 docs\CHANGELOG.md          版本演进
+docs\EMU-VERIFY.md         模拟器验证流程（tools\emu.py）
 docs\TASK-TEMPLATE.md      任务书模板
 docs\FIX-1.3.2-DIAGNOSIS.md 1.3.2 九个问题的根因
 docs\PHOTO-CLEAN-PLAN.md   照片清理方案（未排期）
