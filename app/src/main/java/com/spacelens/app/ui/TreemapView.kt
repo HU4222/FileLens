@@ -627,7 +627,8 @@ class TreemapView(context: Context) : View(context) {
             }
             MotionEvent.ACTION_UP -> {
                 removeCallbacks(longPress)
-                val b = downBlock
+                // 用抬起点重新命中同一套 blocks.rect；布局/动画后 downBlock 可能过期。
+                val b = blockAt(event.x, event.y) ?: downBlock
                 downBlock = null
                 if (!longPressDone && b != null && b.node >= 0) startRipple(event.x, event.y)
                 if (!longPressDone && b != null && !b.aggregate && selectionActive) {
