@@ -88,7 +88,21 @@ class SettingsPage(context: Context) : LinearLayout(context) {
             setTextColor(Theme.palette.text2)
             setPadding(dp(12f), dp(12f), dp(12f), dp(12f))
             background = rounded(Theme.palette.panelSunken, Theme.palette.line, 12f)
-            setOnClickListener { onTrash?.invoke() }
+            setOnClickListener {
+                val callback = onTrash
+                if (callback == null) {
+                    android.util.Log.e("FileLensSettings", "trash callback is null")
+                    android.widget.Toast.makeText(context, "回收站打开失败", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    try {
+                        callback.invoke()
+                    } catch (t: Throwable) {
+                        android.util.Log.e("FileLensSettings", "open trash failed", t)
+                        android.widget.Toast.makeText(context, "回收站打开失败",
+                                android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         }
         body.addView(trashLine, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         body.addView(TextView(context).apply {

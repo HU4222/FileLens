@@ -467,13 +467,30 @@ class MainActivity : Activity() {
         dialog.show()
     }
 
+    private var trashDialog: android.app.Dialog? = null
+    private var trashPage: TrashPage? = null
+
     private fun showTrashPage() {
-        val dialog = android.app.Dialog(this,
-                android.R.style.Theme_Black_NoTitleBar_Fullscreen)
-        val page = TrashPage(this)
-        page.onClose = { dialog.dismiss() }
-        dialog.setContentView(page)
-        dialog.show()
+        try {
+            if (trashDialog?.isShowing == true) {
+                trashPage?.onShown()
+                return
+            }
+            if (trashDialog == null) {
+                val dialog = android.app.Dialog(this,
+                        android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+                val page = TrashPage(this)
+                page.onClose = { dialog.dismiss() }
+                dialog.setContentView(page)
+                trashDialog = dialog
+                trashPage = page
+            }
+            trashPage?.onShown()
+            trashDialog?.show()
+        } catch (t: Throwable) {
+            android.util.Log.e("FileLensTrash", "open trash failed", t)
+            toast("回收站打开失败")
+        }
     }
 
     private fun cleanupExpiredTrash() {
