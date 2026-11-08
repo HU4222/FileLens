@@ -73,3 +73,58 @@ python tools\emu.py launch
 - 回收站真实路径：`/sdcard/Android/media/com.hu4222.filelens/trash/`
 - 删除确认框需要在 3 秒内完成「长按 800ms」，否则自动关闭（`Dialogs.showDeleteConfirm` 的 3 秒超时）——下轮脚本要注意这个窗口。
 - 撤销条位置：胶囊上方（`bottomMargin 120dp`），y ≈ 1990（1080×2340）。
+
+---
+
+# 第二轮（1.4.2，基线 0802fb7）
+
+## A. 先修 F4（索引未就绪搜索假空）
+
+**PASS（修复后）**
+
+- 修复：`MainActivity` 新增 `indexLoading`（启动为 true，快照加载/扫描完成置 false）；`SearchPage.indexLoading` 回调 + `onIndexReady()`；`perform()` 在未就绪时显示「正在载入索引…」且不缓存空结果，就绪后 `onIndexReady()` 自动重跑当前查询。提交 `f322cbc`。
+- 验证：`am force-stop` → `am start -W`（TotalTime 1743ms）→ 立即搜 `a.txt` → `找到 1 项`（`.tmp/emu/121-cold-search2.png`，dump `f4.xml`）。
+- 限制：本轮没在模拟器上抓到「正在载入索引…」的实际画面（快照加载 < 输入延迟），该分支为代码路径确认；未再出现「没有名字包含」的错误结论。
+
+## R2 回收站 30 天过期
+
+**PASS**
+
+- 31 天：把回收站条目 `trash.json` 的 `movedAt` 改为 31 天前后冷启动，`a.txt` 与 `trash.json` 均被清掉（batch 目录只剩空 `Download/FileLensTest`），原路径无文件。
+- 29 天：手工构造 `20261108-test29` 条目（`movedAt` = 29 天前），冷启动后 `cat .../a29.txt` 仍返回 `KEEP29`，条目保留。
+- 说明：`purgeExpired` 以 `trash.json` 的 `movedAt` 为准，不是文件系统 mtime；本轮按 meta 构造。
+
+## R3 相册文件走系统回收站
+
+**NOT RUN**（时间用尽，未执行；不是 BLOCKED，下轮继续）
+
+## R4 预览页删除 + #50 无法解码
+
+**NOT RUN**（时间用尽）
+
+## R5 清理页批量删除 + 撤销
+
+**FAIL（新缺陷 F5，未修）**
+
+- 操作：清理页选中 3 项（还默认选中了其它重复项，实际 14 项）→ 删除选中 → 长按确认。
+- 结果：14 项移入回收站，**只出现 toast「已移入回收站 14 个」，没有「撤销」条**；点撤销条应在的位置（y≈1990）无反应，文件未恢复。
+- 根因猜测：清理页批量删除走的是 `CleanPage` → `MainActivity` 的另一条删除路径（`toast(result.message)` 分支），没有像 `executeDelete()` 那样设置 `lastTrashBatch` 并调 `showUndoBar()`；第一轮 F2 的修复只覆盖了搜索/树图的单删与 `executeDelete`。
+- 修复方案：把清理页批量删除统一到 `executeDelete()`（或补 `lastTrashBatch` + `showUndoBar()` + `searchPage.refreshNow()`），并补 `md5` 前后对比。
+- 风险等级：文件在回收站里可手动恢复，不是不可逆；但「撤销」入口缺失与第一轮 F1 同类，属于数据风险类，优先修。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 2（A、R2） |
+| FAIL | 1（R5 → F5） |
+| NOT RUN | 2（R3、R4） |
+
+新缺陷：**F5 清理页批量删除没有撤销入口**（未修）。
+
+
+## 第二轮补充（收尾）
+
+- F5 修复已提交 8e212a1：CleanPage 批量删除改用显式 batch，并通过 onBatchDeleted 回调 MainActivity 弹 5 秒撤销条。
+- **未重跑验证**（本轮时间用尽），R5 仍记 FAIL（修复未验证）；下一轮第一件事：清理页选 3 项删除 → 撤销条出现 → 点撤销 → 3 项回原处。
+- A 的「正在载入索引…」文案未在模拟器窗口内抓到（快照加载快于输入延迟），该分支为代码路径确认。
