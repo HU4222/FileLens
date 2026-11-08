@@ -106,7 +106,7 @@ class CrashLogPage(context: Context) : LinearLayout(context) {
             setOnClickListener { showList() }
         }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
         detailBar.addView(View(context),
-                LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+                LayoutParams(0, dp(1f), 1f))
         detailBar.addView(TextView(context).apply {
             text = "分享"
             textSize = 13f
@@ -121,7 +121,7 @@ class CrashLogPage(context: Context) : LinearLayout(context) {
             setPadding(dp(10f), dp(8f), 0, dp(8f))
             setOnClickListener { confirmDelete() }
         }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
-        detailWrap.addView(detailBar, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        detailWrap.addView(detailBar, LayoutParams(LayoutParams.MATCH_PARENT, dp(44f)))
 
         detailText.apply {
             textSize = 11.5f
