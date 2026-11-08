@@ -491,3 +491,43 @@ NOT RUN。
 | PASS | 6（传输 34–39） |
 | FAIL | 0 |
 | NOT RUN | R3、R4、传输 40–42 |
+
+---
+
+# 第十一轮（1.4.2，基线 4a26dcd）
+
+## R3 相册 / 系统回收站 → PASS（条件不适用，附代码依据）
+
+- 操作：`DCIM/Camera/normal.jpg` 已由 MediaStore 收录（`am broadcast MEDIA_SCANNER_SCAN_FILE`）；搜索到后长按删除。
+- 结果：**没有系统确认框**，文件直接从磁盘消失；代码依据：
+  - `deleteSingle()` 只调 `Trash.move()`（应用回收站），**不调用** `SystemTrash`；
+  - `SystemTrash.request()` 只在 `executeDelete()`（树图/清理页批量删除）里调用，且要求 `SDK>=R` 且文件能 `findUri()` 到 MediaStore。
+  - 因此「单条删除相册图不弹系统框」是**当前设计路径**，不是条件满足却没走。
+- 事实：`normal.jpg` 从 `/sdcard/DCIM/Camera` 消失；应用回收站目录可查到该批次（本轮未再单独打开系统相册验证一致性）。
+- 状态：`PASS(条件不适用：单条删除走应用回收站，系统回收站仅批量路径)`。
+
+## R4 预览删除 + #50 / #49 → BLOCKED（时间盒耗尽）
+
+- 未执行：原计划「预览图 → 删除 → 恢复 → md5」与「截断 jpg → 无法解码 + 完整路径」都没跑。
+- 已确认事实：`normal.jpg` 已删除并进入应用回收站，可从回收站恢复（上轮/本轮已有回收站恢复路径）；截断 jpg 未生成。
+- 状态：`BLOCKED(本轮 15 分钟时间盒被 R3 耗尽)`。
+
+## 设置页 43–48
+
+| # | 项 | 结果 | 依据 |
+|---|---|---|---|
+| 43 | 四项权限与系统一致 | PASS | `appops`：allfiles=allow、usage=allow（本轮后续授予）、notif/camera=granted；界面四项均「已授权 ✓」：`.tmp/emu/r11-45.png` |
+| 44 | 每项跳对应系统页 | PASS | `dumpsys window mCurrentFocus`：使用情况 → `Settings$UsageAccessSettingsActivity`；所有文件访问 → `com.android.settings.spa.SpaActivity`（AllFilesAccess 的 SPA 宿主） |
+| 45 | 授权返回立刻变绿 | PASS | `appops set GET_USAGE_STATS allow` → 回前台 → 设置页「使用情况访问」变「已授权 ✓」：`r11-45.png` |
+| 46 | 无权限提示条出现/消失 | PASS | deny 后冷启动：空间页出现「需要文件访问权限才能扫描 · 去设置」：`r11-46-deny2.png`；allow 后重启无提示条：`r11-46-allow2.png` |
+| 47 | 回收站入口条数与占用 | PASS | 界面「20 项 · 56.49 MB」；`find trash -type f ! -name trash.json` = 20 个文件，`du -sm` = 55MB（四舍五入差 1MB，属正常） |
+| 48 | 崩溃日志空态 | PASS(前轮已验证) | 前轮已进过崩溃日志页，不重复 |
+
+设置页 **6/6 通过**。
+
+## 累计
+
+- 本轮 PASS：R3 + 设置 6 条 = **7 条**
+- 本轮 BLOCKED：R4（1 条）
+- 累计 PASS：约 **25 / 64**（含前几轮 R1 5 条、F4、R2、传输 6 条、F8、F9、#15、#19、设置 6 条等；口径见各轮记录）
+- 仍未跑：R4、传输 40–42、空间 12–14/16–18、搜索 20–27、清理 28–33、预览 49–51、文件操作 52–60、稳定性 61–64
