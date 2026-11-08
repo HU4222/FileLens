@@ -27,7 +27,8 @@ JDK        C:\Program Files\Java\jdk-17
 ## 三、当前版本与状态
 
 ```
-当前版本   1.3.7 / versionCode 19（已构建、已安装冷启动不崩；真机验收未回）
+当前版本   1.3.7 / versionCode 19（真机验收：P1-1 齿轮 ✅ / P1-5 Shizuku 隐藏 ✅
+                                   P1-2、P1-3、P1-4 代码核对通过，动画观感未验）
 已验证版本 1.3.6 / versionCode 18（真机验过：渐变淡出 ✅ 回收站进入 ✅ 底栏五项 ✅）
 最近提交   660026f chore(release): bump to 1.3.7
            54b0ff7 fix(clean): hide shizuku block unless binder is detected
