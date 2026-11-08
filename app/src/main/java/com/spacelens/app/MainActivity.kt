@@ -117,6 +117,8 @@ class MainActivity : Activity() {
     private var scanner: Scanner? = null
     private var scanGeneration = 0
     private var snapshotLoading = false
+    /** 索引是否可查：快照加载/扫描完成前为 true，搜索页据此显示「正在载入」。 */
+    @Volatile private var indexLoading = true
     private var pendingStartAfterIo = false
     private var saveThread: Thread? = null
     private val selection = SelectionState()
@@ -185,6 +187,7 @@ class MainActivity : Activity() {
         benchPage = BenchPage(this)
         minePage = MinePage(this)
         searchPage = SearchPage(this)
+        searchPage.indexLoading = { indexLoading }
         cleanPage = CleanPage(this)
         settingsPage = SettingsPage(this)
         settingsPage.onTrash = { showTrashPage() }
@@ -1101,6 +1104,7 @@ class MainActivity : Activity() {
             return
         }
         val gen = ++scanGeneration
+        indexLoading = true
         store.reset()
         treePage.setScanning(store, "内部存储")
         treePage.setForbidden(emptyMap())
@@ -1127,6 +1131,7 @@ class MainActivity : Activity() {
                 if (gen != scanGeneration || isFinishing || isDestroyed) return
                 scanner = null
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                indexLoading = false
                 overviewPage.setScanning(false)
                 treePage.finishScan(store, summary.rootName)
                 refreshForbidden()
@@ -1137,6 +1142,7 @@ class MainActivity : Activity() {
                 updateOverview()
                 updateMine()
                 searchPage.rootPath = rootPath()
+                searchPage.onIndexReady()
                 cleanPage.rootPath = rootPath()
                 cleanPage.reset()
                 updateDetail()
@@ -1177,6 +1183,7 @@ class MainActivity : Activity() {
 
     private fun loadSnapshot() {
         if (!SnapshotStore.fileFor(this).isFile) {
+            indexLoading = false
             treePage.setEmpty("内部存储")
             return
         }
@@ -1188,6 +1195,9 @@ class MainActivity : Activity() {
             android.util.Log.i("SpaceLens", "snapshot load nodes=${meta?.nodes ?: -1} ms=$ms ok=${meta != null}")
             runOnUiThread {
                 snapshotLoading = false
+                indexLoading = false
+                searchPage.rootPath = rootPath()
+                searchPage.onIndexReady()
                 if (meta != null && store.count > 1) {
                     treePage.setTree(store, 0)
                     refreshForbidden()

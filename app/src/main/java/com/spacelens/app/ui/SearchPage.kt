@@ -43,6 +43,8 @@ class SearchPage(context: Context) : LinearLayout(context) {
 
     var store: NodeStore? = null
     var rootPath: String = ""
+    /** 索引加载/扫描期间为 true，搜索页显示「正在载入索引」而不是空结果。 */
+    var indexLoading: (() -> Boolean)? = null
     var onOpenLocation: ((Int) -> Unit)? = null
     var onPreview: ((Int) -> Unit)? = null
     var onDeleteRequested: ((Int) -> Unit)? = null
@@ -210,6 +212,11 @@ class SearchPage(context: Context) : LinearLayout(context) {
         lastSignature = ""
         inFlightSignature = ""
         refresh()
+    }
+
+    /** 索引就绪后自动重跑当前查询，用户不用再打一遍。 */
+    fun onIndexReady() {
+        if (!query.text.isNullOrEmpty()) refreshNow()
     }
 
     /** 供空间分布卡跳转：按 Classifier 分类索引选中对应 chip 并立即查询。 */
@@ -411,6 +418,17 @@ class SearchPage(context: Context) : LinearLayout(context) {
         if (hasResult && sig == lastSignature) return
         inFlightSignature = sig
         val snapshot = store
+        if (indexLoading?.invoke() == true) {
+            hits = emptyList()
+            total = 0
+            hasResult = false
+            lastSignature = ""
+            inFlightSignature = ""
+            clearBtn.visibility = View.GONE
+            adapter.notifyDataSetChanged()
+            status.text = "正在载入索引…"
+            return
+        }
         if (snapshot == null || snapshot.count <= 1) {
             hits = emptyList()
             total = 0
