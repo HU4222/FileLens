@@ -46,6 +46,7 @@ import com.spacelens.app.ui.BackdropView
 import com.spacelens.app.ui.BenchPage
 import com.spacelens.app.ui.Breakpoints
 import com.spacelens.app.ui.CleanPage
+import com.spacelens.app.ui.CrashLogPage
 import com.spacelens.app.ui.DetailPane
 import com.spacelens.app.ui.Dialogs
 import com.spacelens.app.ui.FpsHudView
@@ -183,6 +184,7 @@ class MainActivity : Activity() {
         cleanPage = CleanPage(this)
         settingsPage = SettingsPage(this)
         settingsPage.onTrash = { showTrashPage() }
+        settingsPage.onCrashLog = { showCrashLogPage() }
         settingsPage.onClose = { selectTab(if (previousTab in 0..3) previousTab else 0, true) }
         settingsPage.onRequestCamera = {
             ActivityCompat.requestPermissions(this,
@@ -457,6 +459,7 @@ class MainActivity : Activity() {
         val page = SettingsPage(this)
         page.onClose = { dialog.dismiss() }
         page.onTrash = { showTrashPage() }
+        page.onCrashLog = { showCrashLogPage() }
         dialog.setContentView(page)
         dialog.show()
     }
@@ -495,6 +498,45 @@ class MainActivity : Activity() {
         } catch (t: Throwable) {
             android.util.Log.e("FileLensTrash", "open trash failed", t)
             toast("回收站打开失败")
+        }
+    }
+
+    private var crashDialog: android.app.Dialog? = null
+    private var crashPage: CrashLogPage? = null
+
+    private fun showCrashLogPage() {
+        try {
+            if (crashDialog?.isShowing == true) {
+                crashPage?.onShown()
+                return
+            }
+            if (crashDialog == null) {
+                val dialog = android.app.Dialog(this,
+                        android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+                val page = CrashLogPage(this)
+                page.onClose = { dialog.dismiss() }
+                dialog.setContentView(page)
+                dialog.setCancelable(false)
+                // 返回键只处理本页：先退全文，再关页；不能直接退到桌面。
+                dialog.setOnKeyListener { _, keyCode, event ->
+                    if (keyCode == KeyEvent.KEYCODE_BACK) {
+                        if (event.action == KeyEvent.ACTION_UP) page.handleBack()
+                        true
+                    } else {
+                        false
+                    }
+                }
+                dialog.setOnDismissListener {
+                    if (::settingsPage.isInitialized) settingsPage.refresh()
+                }
+                crashDialog = dialog
+                crashPage = page
+            }
+            crashPage?.onShown()
+            crashDialog?.show()
+        } catch (t: Throwable) {
+            android.util.Log.e("FileLensCrash", "open crash log failed", t)
+            toast("崩溃日志打开失败")
         }
     }
 

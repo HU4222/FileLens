@@ -23,6 +23,7 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.spacelens.app.BuildConfig
 import com.spacelens.app.core.AppStats
+import com.spacelens.app.core.CrashLog
 import com.spacelens.app.core.Trash
 
 /** 设置页：四项权限、回收站、版本信息。 */
@@ -30,11 +31,13 @@ class SettingsPage(context: Context) : LinearLayout(context) {
 
     var onClose: (() -> Unit)? = null
     var onTrash: (() -> Unit)? = null
+    var onCrashLog: (() -> Unit)? = null
     var onRequestCamera: (() -> Unit)? = null
     private val handler = Handler(Looper.getMainLooper())
     private val rows = ArrayList<Row>()
     private val trashRow = LinearLayout(context)
     private val trashLine = TextView(context)
+    private val crashLine = TextView(context)
 
     private data class Row(
             val action: TextView,
@@ -81,6 +84,36 @@ class SettingsPage(context: Context) : LinearLayout(context) {
         addPermission(body, "相机",
                 "扫码连接电脑时要用。",
                 { camera() }, { requestCamera() })
+
+        body.addView(section("诊断"), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        val diagRow = LinearLayout(context).apply {
+            orientation = VERTICAL
+            isClickable = true
+            isFocusable = true
+            setPadding(dp(12f), dp(12f), dp(12f), dp(12f))
+            background = rounded(Theme.palette.panelSunken, Theme.palette.line, 12f)
+            setOnClickListener { onCrashLog?.invoke() }
+        }
+        val diagHead = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
+        crashLine.apply {
+            textSize = 14f
+            setTextColor(Theme.palette.text2)
+        }
+        diagHead.addView(crashLine, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        diagHead.addView(TextView(context).apply {
+            text = "进入 ›"
+            textSize = 12f
+            setTextColor(Theme.palette.brand)
+            setPadding(dp(8f), 0, 0, 0)
+        }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        diagRow.addView(diagHead, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        diagRow.addView(TextView(context).apply {
+            text = "崩溃时自动记录，只存在本机，不会上传。"
+            textSize = 11f
+            setTextColor(Theme.palette.muted)
+            setPadding(0, dp(5f), 0, 0)
+        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        body.addView(diagRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         body.addView(section("其他"), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         trashRow.apply {
@@ -180,6 +213,7 @@ class SettingsPage(context: Context) : LinearLayout(context) {
         val bytes = items.sumOf { it.size }
         trashLine.text = "回收站 · ${items.size} 项 · " +
                 android.text.format.Formatter.formatFileSize(context, bytes)
+        crashLine.text = "崩溃日志 · ${CrashLog.count(context)} 份"
     }
 
     override fun onAttachedToWindow() {
