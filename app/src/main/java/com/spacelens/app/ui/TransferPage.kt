@@ -108,6 +108,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private val satLabels = ArrayList<TextView>()
     private var ballsExpanded = false
     private var ballAnim: Motion.Animation? = null
+    private var scrimAnim: Motion.Animation? = null
     private var pressAnim: Motion.Animation? = null
     private var longPress: Runnable? = null
     private var longPressed = false
@@ -413,7 +414,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
     }
 
     private fun buildBalls() {
-        scrim.setBackgroundColor(Color.TRANSPARENT)
+        scrim.setBackgroundColor(Color.argb(89, 0, 0, 0))
+        scrim.alpha = 0f
         scrim.isClickable = true
         scrim.visibility = View.GONE
         scrim.setOnClickListener { collapseBalls() }
@@ -573,7 +575,12 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private fun expandBalls() {
         if (ballsExpanded) return
         ballAnim?.cancel()
+        scrimAnim?.cancel()
         scrim.visibility = View.VISIBLE
+        val fromScrim = scrim.alpha
+        scrimAnim = Motion.tween(150, Ease::linear, { t ->
+            scrim.alpha = fromScrim + (1f - fromScrim) * t
+        })
         for (i in satBalls.indices) {
             satBalls[i].visibility = View.VISIBLE
             satLabels[i].visibility = View.VISIBLE
@@ -605,6 +612,13 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private fun collapseBalls() {
         if (!ballsExpanded) return
         ballAnim?.cancel()
+        scrimAnim?.cancel()
+        val fromScrim = scrim.alpha
+        scrimAnim = Motion.tween(150, Ease::linear, { t ->
+            scrim.alpha = fromScrim * (1f - t)
+        }, {
+            scrim.visibility = View.GONE
+        })
         val fromScale = FloatArray(satBalls.size) { satBalls[it].scaleX }
         val fromAlpha = FloatArray(satBalls.size) { satBalls[it].alpha }
         val fromY = FloatArray(satBalls.size) { satBalls[it].translationY }
@@ -632,7 +646,6 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 satLabels[i].visibility = View.INVISIBLE
                 satLabels[i].alpha = 0f
             }
-            scrim.visibility = View.GONE
             ballsExpanded = false
         })
     }
