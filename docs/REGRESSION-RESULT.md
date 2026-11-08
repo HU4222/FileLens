@@ -762,3 +762,38 @@ if (scanner != null) {
 | PASS | 1（56） |
 | FAIL | 1（F11 未修好） |
 | NOT RUN | Tx 边界、57、59、51 |
+
+---
+
+# 第十九轮（1.4.2，基线 d85c5e6）
+
+## F11 树图回不到根 → 仍 BLOCKED（本轮日志没跑到）
+
+计划与动作：
+1. 在 `TreePage` 的 `ACTION_DOWN/ACTION_UP` 加 `TreeHit` 日志（坐标、hit 返回值、backRect、crumbRects、rootIndex、chainOf）。
+2. 编译、安装带日志的包，尝试下钻到 `Download/FileLensTest` 再点面包屑。
+
+结果：
+- 自动化点击链没有进入树图：清 logcat 后点击 (70,290)，`logcat | grep TreeHit` **没有任何输出**；
+- 随后 dump 显示 App 停在「清理」页（`重复文件/应用占用/垃圾建议`），不是树图 overlay；
+- 因此没有拿到 `h` 值，无法判定是 `h==-1`、`h==1` 还是 `h==2` 但处理坏了。
+
+处理：
+- 临时日志已从 `TreePage.kt` 删除；`Select-String TreeHit` 计数 = **0**（构建通过）。
+- 本轮没有对 F11 做新的功能修改；`d85c5e6` 的热区放大仍是当前状态。
+
+结论：`BLOCKED(本轮点击没有进入树图，TreeHit 日志为空；F11 根因仍未定位)`。
+
+## 已确认事实（对下一轮有用）
+
+- F11 的显示异常上次已实拍：列表内容是 `FileLensTest` 的 `k1/k2/k3/u*.txt/T`，但顶栏与面包屑写「内部存储」（`r18-tree-nav.png`）。
+- 这说明至少有一条独立问题：绘制用的层级名可能与 `rootIndex` 不一致；下次应先静态核对 `TreePage.onDraw` 里 `displayName`/crumbs 取的是 `rootName` 还是 `chainOf(rootIndex)`，再跑点击。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 0 |
+| FAIL | 0 |
+| BLOCKED | 1（F11，日志未取到） |
+| NOT RUN | 56 的 Tx 边界、57、59、51 |
