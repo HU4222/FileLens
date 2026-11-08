@@ -429,8 +429,8 @@ class TreePage(context: Context) : FrameLayout(context) {
             val s = store
             val drilled = s != null && rootIndex != 0
             if (drilled) {
-                backRect.set(root.left + 10f * d, root.centerY() - 16f * d,
-                        root.left + 42f * d, root.centerY() + 16f * d)
+                backRect.set(root.left + 2f * d, root.centerY() - 22f * d,
+                        root.left + 46f * d, root.centerY() + 22f * d)
                 if (pressed == 1) canvas.drawCircle(backRect.centerX(), backRect.centerY(), 16f * d,
                         Draw.fill(Theme.alpha(p.brand, 18)))
                 Draw.icon(canvas, Icon.BACK, backRect.centerX(), backRect.centerY(), 17f * d, p.text, 2f * d)
@@ -517,7 +517,8 @@ class TreePage(context: Context) : FrameLayout(context) {
                     val nm = s.nameOf(node)
                     val ew = Draw.ellipsize(nm, paint, w - margin - cx - 4f * d)
                     canvas.drawText(ew, cx, y + 19f * d, paint)
-                    val rect = RectF(cx - 2f * d, y, cx + paint.measureText(ew) + 2f * d, y + crumbH)
+                    val rect = RectF(cx - 4f * d, y - 7f * d,
+                            cx + paint.measureText(ew) + 4f * d, y + crumbH + 7f * d)
                     crumbRects[node] = rect
                     cx += paint.measureText(ew) + 6f * d
                 }

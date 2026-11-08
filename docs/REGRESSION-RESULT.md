@@ -729,3 +729,36 @@ if (scanner != null) {
 | FAIL | 0 |
 | BLOCKED | 1（56） |
 | 修复 | F10（已修，提示未实拍） |
+
+---
+
+# 第十八轮（1.4.2，基线 9f89c01）
+
+## F11 树图回不到根 → 未修好（FAIL）
+
+改动：把 `TreePage` 的返回箭头热区从 32dp 扩到 44dp、面包屑热区上下各加 7dp（`backRect`、`crumbRects`）。
+
+实测：
+- 下钻到 `Download/FileLensTest` 后点面包屑最左段（70,290）→ 列表**没有变化**，仍在 FileLensTest；
+- 截图上有个更怪的现象：列表内容是 `FileLensTest` 的 `k1/k2/k3/u*.txt/T`，但顶栏和面包屑都写「内部存储」（`.tmp/emu/r18-tree-nav.png`）——说明不只是热区问题，面包屑/标题显示也与当前 rootIndex 不一致。
+- 结论：`FAIL(F11)`，热区放大没有解决；显示层和命中层都要继续查。
+
+## #56 文件夹移进自己的子目录 → **PASS**
+
+步骤与证据：
+- `T` 在树图 `Download/FileLensTest` 中可见（列表第 7 行，`.tmp/emu/r18-tree-nav.png`）；
+- 长按 `T` → 「移动到…」→ 选择器进 `T` → 再进 `T/x` → 「移到这里」；
+- 界面弹出明确提示：**「不能把文件夹移到它自己里面」**（`.tmp/emu/r18-56-toast.png`）；
+- 文件系统验证：
+  - `ls -R .../T > /sdcard/after.txt`
+  - `diff /sdcard/before.txt /sdcard/after.txt` → **EXIT=0**（完全一致）
+  - `ls /sdcard/Download/FileLensTest` → `T` 仍在原位
+- 边界 `T → Tx`：**NOT RUN**（时间用尽，未造 Tx）。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 1（56） |
+| FAIL | 1（F11 未修好） |
+| NOT RUN | Tx 边界、57、59、51 |
