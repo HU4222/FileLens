@@ -1503,14 +1503,30 @@ class MainActivity : Activity() {
         hideUndoLayer()
         Thread({
             var n = 0
+            val restored = ArrayList<Trash.Item>()
             for (e in Trash.entries(this)) {
-                if (e.batchId == batch && Trash.restore(this, e)) n++
+                if (e.batchId == batch && Trash.restore(this, e)) {
+                    n++
+                    restored.add(e)
+                }
             }
             runOnUiThread {
-                toast("已撤销，还原 $n 项")
+                toast("已恢复 $n 项")
                 lastTrashBatch = null
+                // 只把节点补回本地快照并刷新当前页；不切 Tab、不开树图、不全盘重扫。
+                for (e in restored) {
+                    val idx = store.indexOfPath(rootPath(), e.originalPath)
+                    if (idx > 0) {
+                        val f = File(e.originalPath)
+                        store.restoreNode(idx, f.length(), f.lastModified(), f.isDirectory)
+                    }
+                }
+                treePage.refreshTree()
+                searchPage.refreshNow()
+                cleanPage.reset()
+                updateOverview()
+                updateDetail()
                 updateMine()
-                if (n > 0) startScan()
             }
         }, "SpaceLens-Undo").start()
     }

@@ -178,6 +178,30 @@ class NodeStore(initialCapacity: Int = 65536) {
         }
     }
 
+    /** 撤销删除：把 markDeleted 清零的节点按磁盘现状补回，避免为撤销触发全盘重扫。 */
+    fun restoreNode(index: Int, fileSize: Long, mtimeMs: Long, isDir: Boolean) {
+        lock.writeLock().lock()
+        try {
+            if (index <= 0 || index >= count) return
+            val f = if (isDir) 0 else 1
+            val d = if (isDir) 1 else 0
+            size[index] = fileSize.coerceAtLeast(0L)
+            files[index] = f
+            dirs[index] = d
+            flags[index] = if (isDir) DIR else FILE
+            this.mtime[index] = mtimeMs
+            var a = parent[index]
+            while (a >= 0) {
+                size[a] = size[a] + this.size[index]
+                files[a] = files[a] + f
+                dirs[a] = dirs[a] + d
+                a = parent[a]
+            }
+        } finally {
+            lock.writeLock().unlock()
+        }
+    }
+
     /** 删除成功后把节点体积从祖先链扣除，树图无需重扫即可收缩。 */
     fun markDeleted(indices: IntArray) {
         lock.writeLock().lock()

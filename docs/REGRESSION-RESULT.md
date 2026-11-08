@@ -357,3 +357,53 @@ NOT RUN。
 | NOT RUN | R3、R4、空间 #15/#19 |
 
 新缺陷：**F8 撤销后 startScan 跳回空间/树图**。
+
+
+---
+
+# 第八轮（1.4.2，基线 94aadcf）
+
+## 前置：权限
+
+本轮所有结果均在 MANAGE_EXTERNAL_STORAGE=allow 前提下取得。	ools/emu.py install 现在安装成功后自动对四项权限执行 _set_perm(..., allow)，输出「已自动授权四项权限（回归前置）」。
+
+## A. 修 F8（撤销跳页）→ PASS（搜索页已验证）
+
+改动：
+- NodeStore.restoreNode(index, size, mtime, isDir)：把 markDeleted 清零的 size/flags 补回，并重新累加祖先链；
+- undoDelete()：不再调 startScan()；恢复成功后按 store.indexOfPath() 找回节点、
+estoreNode() 回填，然后只刷新 	reePage / searchPage / cleanPage / overview / detail / mine；toast 改「已恢复 N 项」。
+- 不切 Tab、不开树图、不全盘重扫。
+
+验证（搜索页）：
+- 搜 ui.xml → 长按 → 删除 → 确认 → 撤销条 → 点撤销；
+- ssert-page 搜索 **通过**（不再跳空间）；
+- md5sum /sdcard/ui.xml = 120d4260c8e34af5d44b78a05870bd9a（与删除前一致）；
+- 截图里搜索结果恢复到 2 项（ui.xml 重新出现）：.tmp/emu/r8-f8.png。
+
+## B. 测试环境
+
+已改 	ools/emu.py install：安装成功后自动授权四项权限。
+
+## C1. 清理页批量删除 + 撤销
+
+- 确认框定位：按钮可点区域实测在 **y≈1990**（不是 dump 的 1960，也不是截图的 2080）；
+- 用 y=1990 能打开确认框；长按 800ms 长按后执行删除；
+- 撤销后 ssert-page 清理 **通过**（不跳页，F8 修复生效）；
+- 但清理页随后显示「重复文件 · 0 组」，而 ls 里 pp_22/app_23/k1 仍在磁盘、md5 未变 —— 列表与磁盘不一致，记 **F9 候选**（与上轮 F8 候选同源：markDeleted/restore 后 clean 页扫描状态没跟上）。
+- 状态：BLOCKED(F9 候选：清理页结果与磁盘不一致)，未继续卡住。
+
+## C2 / C3 / C4
+
+R3 相册/系统回收站、R4 预览删除 + #50、空间页 #15/#19：**NOT RUN**（本轮时间用尽）。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 1（F8 搜索页撤销不跳页） |
+| FAIL | 0 |
+| BLOCKED | 1（清理页批量删除，F9 候选） |
+| NOT RUN | R3、R4、空间 #15/#19 |
+
+新缺陷候选：**F9 清理页删除/撤销后「0 组」与磁盘文件不一致**。

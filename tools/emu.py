@@ -298,6 +298,10 @@ def cmd_install(args):
     print(out.strip())
     if proc.returncode != 0 or "Success" not in out:
         raise EmuError("安装失败（exit=%s）" % proc.returncode)
+    # 重装会把 MANAGE_EXTERNAL_STORAGE 打回 default，删除/重命名会整片失败；装完立即授权。
+    for item in PERM_ITEMS:
+        _set_perm(item, "allow")
+    print("已自动授权四项权限（回归前置）")
     return 0
 
 
