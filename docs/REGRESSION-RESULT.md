@@ -690,3 +690,42 @@ NOT RUN（本轮全部时间用于 56）。
 1. `adb shell am force-stop` + 冷启动，确认 `mCurrentFocus` 是 `MainActivity`；
 2. 用 logcat 断言扫描开始/结束（`SpaceLens` tag），再判断按钮是否触发；
 3. 若日志无扫描记录，直接查 `OverviewPage`/`TreePage` 的 `重扫` 触摸区域代码（`hit()` / `onTouchEvent`），不再靠点。
+
+---
+
+# 第十七轮（1.4.2，基线 683221f）
+
+## F10：扫描中「重扫」静默取消 → 已修（选 B）
+
+改动（`MainActivity.startScan()`）：
+```kotlin
+if (scanner != null) {
+    toast("正在扫描，完成后可再次扫描")
+    return
+}
+```
+不再 `cancelScan()`；扫描中再点重扫只会得到明确提示，不会静默停掉正在跑的扫描。选 B 而非 A，是因为 A 要等旧线程真正退出再起新线程，改动线程生命周期风险更大；B 零风险且满足“不许什么都没发生”。
+
+验证：
+- 冷启动后点「重新扫描」→ 树图顶栏显示「扫描中 · 9,115 文件」「停止」，logcat：`scan finished files=9118 dirs=166 bytes=359017497 elapsedMs=4235` + `snapshot save nodes=9284`。
+- 扫描中再点重扫的 toast 没抓到（扫描 4.2s 就结束，第二次点击落在完成后）；该分支只改了 `startScan` 的一个判断，未再实跑命中。**F10 记为“已修，提示未实拍”**。
+
+## 重扫后能看到新目录 → PASS
+
+- 扫描完成后搜索 `a.txt`，结果第二行显示 `Download/FileLensTest/T` → 新建的 `T` 目录已被索引（`.tmp/emu/` 对应 dump `at.xml`）。
+- 说明上一轮“看不到 T”是因为扫描被中断/未完成，不是扫描器漏读。
+
+## #56 文件夹移进自己的子目录 → 仍 BLOCKED
+
+- 本轮时间全用在 F10 与树图导航；树图当时停在 `Android/media`，面包屑/返回箭头点击均未生效（dump 列表不变），无法回到根再下钻 `Download/FileLensTest/T`。
+- 未执行移动动作；`T` 仍在原位（上一轮 `before.txt` 可对比）。
+- 状态：`BLOCKED(树图导航无法回到根，未到达移动选择器)`。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 1（重扫后 T 可见） |
+| FAIL | 0 |
+| BLOCKED | 1（56） |
+| 修复 | F10（已修，提示未实拍） |

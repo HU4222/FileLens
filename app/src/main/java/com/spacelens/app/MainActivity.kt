@@ -1099,7 +1099,8 @@ class MainActivity : Activity() {
             return
         }
         if (scanner != null) {
-            cancelScan()
+            // 扫描进行中再点「重扫」不能静默取消；等本轮扫完再点一次。
+            toast("正在扫描，完成后可再次扫描")
             return
         }
         val root = Environment.getExternalStorageDirectory()
