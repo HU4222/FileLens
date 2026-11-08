@@ -113,6 +113,27 @@ class CleanPage(context: Context) : LinearLayout(context) {
         selectSegment(0)
     }
 
+    /** 仅 Debug：按段号切段并打印关键计数，测试脚手架。 */
+    fun debugSelectSegment(index: Int) {
+        if (index in 0..2) selectSegment(index)
+    }
+
+    fun debugDumpCounts() {
+        var files = 0
+        var bytes = 0L
+        for (g in groups) {
+            files += g.files.size
+            bytes += g.reclaim
+        }
+        android.util.Log.i("FileLensDump",
+                "DClean dupGroups=${groups.size} dupFiles=$files dupBytes=$bytes")
+        android.util.Log.i("FileLensDump",
+                "DClean appCount=${appEntries.size} appLoaded=$appLoaded sortByCache=$sortByCache")
+        android.util.Log.i("FileLensDump",
+                "DClean garbageCount=${garbageCategories.size} " +
+                        "garbageBytes=${garbageCategories.sumOf { it.bytes }}")
+    }
+
     private fun buildSegments() {
         segmentBar.orientation = HORIZONTAL
         segmentBar.gravity = Gravity.CENTER_VERTICAL

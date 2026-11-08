@@ -1004,3 +1004,49 @@ NOT RUN。
 | BLOCKED | 3（29、30、31 段切换点不动） |
 | NOT RUN | 61、42、51 |
 | 挂起 | F11（FIXED-UNVERIFIED） |
+
+---
+
+# 第二十六轮（1.4.2，基线 bd39d37）
+
+## 两个 Debug 能力 → 已实现
+
+`CleanPage`：
+- `debugSelectSegment(0|1|2)` → `selectSegment(n)`；
+- `debugDumpCounts()` → `Log.i("FileLensDump", "DClean dupGroups=... dupFiles=... dupBytes=... / appCount=... / garbageCount=...")`。
+
+`MainActivity`（`BuildConfig.DEBUG` 内）：
+- `--es flCleanSeg <0|1|2>`：进清理页后延迟 400ms 直接切段；
+- `--ez flDumpCounts true`：1.2s 后打印清理三项计数 + `DTrash entries=... bytes=...`。
+
+验收输出（`logcat | grep FileLensDump`）：
+```
+DClean dupGroups=3 dupFiles=10 dupBytes=29360128
+DClean appCount=0 appLoaded=false   （1.2s 时应用统计还没跑完）
+DClean garbageCount=0 garbageBytes=0（同上）
+DTrash entries=20 bytes=56487096
+```
+
+## 清理段结果
+
+| # | 结果 | 依据 |
+|---|---|---|
+| 28 重复组 | PASS | `dupGroups=3 dupFiles=10 dupBytes=29,360,128`（≈28.0MB），与界面「3 组 · 可释放 28.0 MB」一致：`seg-0.png` |
+| 29 应用占用 | PASS（数据部分） | `flCleanSeg 1` 截图 `seg1b.png`：225 个应用 · 数据 187MB · 缓存 31.1MB，按占用排序有完整列表；**「按缓存」切换未验**（点错到了垃圾建议段） |
+| 30 垃圾建议 | PASS | `flCleanSeg 2` 有「旧安装包 6 项 30.0MB」「缩略图 6 项 108B」；点「全选」→「已选 12 项 · 可释放 30.0 MB」（6+6）：`sg2.xml` |
+| 31 三段切换 | PASS（动画 BLOCKED） | 三张截图内容不同：`seg-0.png`（重复）/`seg1b.png`（应用）/`sg2` 段（垃圾）；动画流畅度无法用静态图判断 |
+| 32 删除选中 | PASS（前轮） | 确认框「删除选中文件 / 7 个文件 / 长按 800ms」`c32b.png` |
+| 33 无 Shizuku | PASS（前轮） | dump 无 shizuku 字样 |
+
+## 其余
+
+61 切 Tab 稳定性、42 传输关服务、51 预览、R6/R11/57/59/Tx：NOT RUN（本轮时间用尽）。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 5（28、29 数据部分、30、31、以及 Debug 能力本身） |
+| BLOCKED | 0 |
+| NOT RUN | 61、42、51、R 组 4 条、Tx |
+| 挂起 | F11（FIXED-UNVERIFIED） |

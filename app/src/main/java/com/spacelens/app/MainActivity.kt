@@ -182,7 +182,12 @@ class MainActivity : Activity() {
         when (intent?.getStringExtra("flPage")) {
             "space" -> selectTab(0, true)
             "search" -> selectTab(1, true)
-            "clean" -> selectTab(2, true)
+            "clean" -> {
+                selectTab(2, true)
+                intent.getStringExtra("flCleanSeg")?.toIntOrNull()?.let { seg ->
+                    root.postDelayed({ cleanPage.debugSelectSegment(seg) }, 400L)
+                }
+            }
             "transfer" -> selectTab(3, true)
             "settings" -> selectTab(4, true)
             "tree" -> {
@@ -195,6 +200,14 @@ class MainActivity : Activity() {
             }
             "trash" -> showTrashPage()
             "crash" -> showCrashLogPage()
+        }
+        if (intent?.getBooleanExtra("flDumpCounts", false) == true) {
+            root.postDelayed({
+                cleanPage.debugDumpCounts()
+                val es = Trash.entries(this)
+                android.util.Log.i("FileLensDump",
+                        "DTrash entries=${es.size} bytes=${es.sumOf { it.size }}")
+            }, 1200L)
         }
     }
 
