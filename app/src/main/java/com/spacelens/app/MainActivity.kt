@@ -530,6 +530,7 @@ class MainActivity : Activity() {
         treeOverlay.pivotX = (origin.centerX() - loc[0]).toFloat()
         treeOverlay.pivotY = (origin.centerY() - loc[1]).toFloat()
         treeOverlay.post {
+            if (treeOverlay.visibility != View.VISIBLE) return@post
             treeOverlay.animate()
                     .alpha(1f).scaleX(1f).scaleY(1f)
                     .setDuration(280L)
@@ -597,6 +598,7 @@ class MainActivity : Activity() {
         benchOverlay.pivotX = (origin.centerX() - loc[0]).toFloat()
         benchOverlay.pivotY = (origin.centerY() - loc[1]).toFloat()
         benchOverlay.post {
+            if (benchOverlay.visibility != View.VISIBLE) return@post
             benchOverlay.animate()
                     .alpha(1f).scaleX(1f).scaleY(1f)
                     .setDuration(280L)

@@ -326,7 +326,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
                 styleSort()
                 renderAppData()
                 appList.animate().cancel()
-                appList.translationY = dp(8f)
+                appList.translationY = dp(8f).toFloat()
                 appList.alpha = 0.5f
                 appList.animate()
                         .translationY(0f).alpha(1f)
