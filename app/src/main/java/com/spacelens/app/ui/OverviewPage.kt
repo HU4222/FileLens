@@ -27,7 +27,6 @@ class OverviewPage(context: Context) : FrameLayout(context) {
     var onHealth: (() -> Unit)? = null
     var onBench: (() -> Unit)? = null
     var onCategory: ((Int) -> Unit)? = null
-    var onRank: (() -> Unit)? = null
 
     private val scroll = ScrollView(context)
     private val content = Content(context)
@@ -146,13 +145,13 @@ class OverviewPage(context: Context) : FrameLayout(context) {
 
         private val scanRect = RectF()
         private val catRects = Array(8) { RectF() }
-        private val quickRects = Array(4) { RectF() }
+        private val quickRects = Array(3) { RectF() }
         private var pressed = -1
 
         private fun contentHeight(): Int {
             var y = 10f * d + heroH + 12f * d
             y += catH + 14f * d
-            y += 22f * d + quickH * 4 + quickGap * 3 + 14f * d
+            y += 22f * d + quickH * 3 + quickGap * 2 + 14f * d
             y += summaryH + 26f * d + 72f * d + 92f * d
             return y.toInt()
         }
@@ -182,18 +181,18 @@ class OverviewPage(context: Context) : FrameLayout(context) {
             val headerPaint = Draw.text(context, 13f, p.text2, medium = true)
             canvas.drawText("快捷入口", margin + 2f * d, y + 14f * d, headerPaint)
             y += 22f * d
-            val titles = arrayOf("空间树", "闪存测速", "存储体检", "大文件排行")
+            val titles = arrayOf("空间树", "闪存测速", "存储体检")
             val subs = arrayOf("实时矩形树图，边扫边长", "六项读写测试与档位评级",
-                    "大文件 / 重复 / 空目录", "Top 50 / 100 · 文件夹下钻")
-            val icons = arrayOf(Icon.TREE, Icon.SPEED, Icon.HEALTH, Icon.LIST)
-            val colors = arrayOf(p.brand, p.brand2, p.ok, p.warn)
-            for (i in 0 until 4) {
+                    "大文件 / 重复 / 空目录")
+            val icons = arrayOf(Icon.TREE, Icon.SPEED, Icon.HEALTH)
+            val colors = arrayOf(p.brand, p.brand2, p.ok)
+            for (i in 0 until 3) {
                 val r = RectF(margin, y, w - margin, y + quickH)
                 quickRects[i].set(r)
                 drawQuick(canvas, r, i, titles[i], subs[i], icons[i], colors[i], p)
                 y += quickH + quickGap
             }
-            y = quickRects[3].bottom + 14f * d
+            y = quickRects[2].bottom + 14f * d
 
             // ---- 上次扫描 ----
             val sum = RectF(margin, y, w - margin, y + summaryH)
@@ -468,7 +467,6 @@ class OverviewPage(context: Context) : FrameLayout(context) {
                             1 -> onOpenTree?.invoke()
                             2 -> onBench?.invoke()
                             3 -> onHealth?.invoke()
-                            4 -> onRank?.invoke()
                             in 100..106 -> onCategory?.invoke(h - 100)
                         }
                     }
