@@ -1311,30 +1311,46 @@ class MainActivity : Activity() {
             val ms = (System.nanoTime() - begin) / 1_000_000L
             android.util.Log.i("SpaceLens", "snapshot load nodes=${meta?.nodes ?: -1} ms=$ms ok=${meta != null}")
             runOnUiThread {
+                val cbBegin = android.os.SystemClock.uptimeMillis()
                 if (com.spacelens.app.BuildConfig.DEBUG) {
-                    val t4 = android.os.SystemClock.uptimeMillis()
                     android.util.Log.i("FLCSTART",
-                            "snap_cb=+${t4 - startT1}ms thread=${Thread.currentThread().name} nodes=${store.count}")
+                            "snap_cb_begin=+${cbBegin - startT1}ms thread=${Thread.currentThread().name} nodes=${store.count}")
                 }
                 snapshotLoading = false
                 indexLoading = false
                 searchPage.rootPath = rootPath()
                 searchPage.onIndexReady()
                 if (meta != null && store.count > 1) {
+                    val storeAt = android.os.SystemClock.uptimeMillis()
                     treePage.setTree(store, 0)
                     refreshForbidden()
                     updateOverview()
-                    updateMine()
+                    if (com.spacelens.app.BuildConfig.DEBUG) {
+                        android.util.Log.i("FLCSTART", "snap_store=${android.os.SystemClock.uptimeMillis() - storeAt}ms")
+                    }
+                    val applyAt = android.os.SystemClock.uptimeMillis()
                     searchPage.rootPath = rootPath()
-                    cleanPage.rootPath = rootPath()
-                    cleanPage.reset()
-                    updateDetail()
+                    // 非当前页的刷新推迟到下一帧，避免首帧后的主线程长任务。
+                    root.post {
+                        updateMine()
+                        cleanPage.rootPath = rootPath()
+                        cleanPage.reset()
+                        updateDetail()
+                    }
+                    if (com.spacelens.app.BuildConfig.DEBUG) {
+                        android.util.Log.i("FLCSTART", "snap_apply=${android.os.SystemClock.uptimeMillis() - applyAt}ms")
+                    }
                 } else {
                     treePage.setEmpty("内部存储")
                 }
                 if (pendingStartAfterIo) {
                     pendingStartAfterIo = false
                     startScan()
+                }
+                if (com.spacelens.app.BuildConfig.DEBUG) {
+                    android.util.Log.i("FLCSTART",
+                            "snap_cb_end=+${android.os.SystemClock.uptimeMillis() - startT1}ms " +
+                                    "cb_total=${android.os.SystemClock.uptimeMillis() - cbBegin}ms")
                 }
             }
         }, "SpaceLens-SnapshotLoad").start()

@@ -28,11 +28,11 @@ JDK        C:\Program Files\Java\jdk-17
 ## 三、当前版本与状态
 
 ```
-当前版本   1.5.1 / versionCode 27（F11 修复：TreePage.showRoot() 补 refreshViews()，列表模式面包屑/返回可回根；
-                                   另含仅 Debug 的 FLCTL 控制点导出、flTap、FLCSTART 细打点；真机未验）
-1.5.1 关键数：flTap crumb:0 已能让列表回根；冷启动 t0_t1≈0.07-0.13s、t1_t2≈0.92-1.03s、
-            resume≈0.33-0.40s、first_layout≈1.57-1.64s、snap_cb≈2.04-2.12s（主线程回调）、
-            total≈2.59-2.73s。
+当前版本   1.5.2 / versionCode 28（冷启动优化：快照回调把非当前页刷新推迟到下一帧；
+                                   另含 F11 修复、仅 Debug 的 FLCTL/flTap/FLCSTART；真机未验）
+1.5.2 关键数：snap_cb 443ms → 9ms；cb 内 snap_store≈6-8ms、snap_apply≈1ms；
+            am start -W 2.43 / 2.51 / 2.61s（改前 2.61 / 2.92 / 2.66s）；
+            first_draw≈1.30-1.51s（改前 1.48-1.59s）。
 已验证版本 1.3.7 / versionCode 19（真机验过：齿轮 ✅ Shizuku 隐藏 ✅ 树图下钻 ✅
                                    六位配对码 ✅ 局域网地址 ✅ 扫码拉起相机 ✅ 本机浏览无下载按钮 ✅）
 最近提交   见 git log（1.5.1 收尾提交）

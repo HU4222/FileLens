@@ -5,6 +5,9 @@
 
 ---
 
+## 1.5.2 · 2026-11-08
+冷启动：快照回调里把 `updateMine / cleanPage.reset / updateDetail` 推迟到下一帧，主线程快照回调从 ~443ms 降到 ~9ms；`am start -W` 2.43–2.61s（改前 2.61–2.92s）。仅 Debug 打点同步补充。
+
 ## 1.5.1 · 2026-11-08
 修 F11：`TreePage.showRoot()` 补 `refreshViews()`，列表模式下面包屑/返回/下钻回根后 adapter 会重建（此前只有树图换根，列表仍挂旧根）。冷启动新增 resume/layout/draw/snap_cb 细打点（仅 Debug）。
 
