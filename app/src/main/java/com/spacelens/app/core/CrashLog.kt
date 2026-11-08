@@ -136,7 +136,7 @@ object CrashLog {
         }
     }
 
-    /** 只删单个文件，不递归删目录（红线：deleteRecursively 保持 0）。 */
+    /** 只删单个文件，不递归删目录（红线要求递归删除保持 0 处）。 */
     private fun prune(dir: File, keep: Int) {
         val files = dir.listFiles { f -> f.isFile && f.name.startsWith("crash-") && f.name.endsWith(".txt") }
                 ?: return
