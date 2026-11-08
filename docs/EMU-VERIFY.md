@@ -115,3 +115,6 @@ python tools\emu.py stop
 - 截图目录不存在会自动创建
 - `perm` 只改权限，不自动 `launch`
 - 路径/端口/包名集中在 `tools/emu.py` 的 `CONFIG`
+
+## Debug 跳转入口（仅 Debug）
+m start ... --es flPage <space|search|clean|transfer|settings|tree|bench|trash|crash>，由 BuildConfig.DEBUG 保护，Release 不生效。

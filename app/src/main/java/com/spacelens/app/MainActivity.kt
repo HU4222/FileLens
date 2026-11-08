@@ -164,9 +164,38 @@ class MainActivity : Activity() {
                 FrameLayout.LayoutParams.MATCH_PARENT,
         ))
         if (prefs.fpsHud) fpsHud.setShowing(true)
+        root.post { applyDebugIntent() }
         android.util.Log.i("SpaceLens", "onCreate done +${android.os.SystemClock.uptimeMillis() - bootAt}ms " +
                 "width=${resources.configuration.screenWidthDp}dp activity=${hashCode()} " +
                 "displayHz=${currentRefreshRate()}")
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        root.post { applyDebugIntent() }
+    }
+
+    /** 仅 Debug：adb --es flPage <page> 直接落到目标页，测试脚手架，Release 不生效。 */
+    private fun applyDebugIntent() {
+        if (!com.spacelens.app.BuildConfig.DEBUG) return
+        when (intent?.getStringExtra("flPage")) {
+            "space" -> selectTab(0, true)
+            "search" -> selectTab(1, true)
+            "clean" -> selectTab(2, true)
+            "transfer" -> selectTab(3, true)
+            "settings" -> selectTab(4, true)
+            "tree" -> {
+                selectTab(0, true)
+                showTreeOverlay()
+            }
+            "bench" -> {
+                selectTab(0, true)
+                showBenchOverlay()
+            }
+            "trash" -> showTrashPage()
+            "crash" -> showCrashLogPage()
+        }
     }
 
     private fun buildUi() {

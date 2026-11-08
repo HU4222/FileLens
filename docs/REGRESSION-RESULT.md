@@ -919,3 +919,44 @@ NOT RUN（本轮时间全给 F12 的改动与验证）。
 | FAIL | 0 |
 | NOT RUN | 24、25、纯筛选空态、清理 6 条、传输 3 条、预览 51、稳定性 4 条、R 组 4 条 |
 | 挂起 | F11（FIXED-UNVERIFIED） |
+
+---
+
+# 第二十四轮（1.4.2，基线 77137bb）
+
+## Debug 跳转入口 → 已实现
+
+`MainActivity`：
+- `applyDebugIntent()`，`if (!com.spacelens.app.BuildConfig.DEBUG) return`；
+- 支持 `flPage`：`space / search / clean / transfer / settings / tree / bench / trash / crash`；
+- `onCreate` 里 `root.post { applyDebugIntent() }`，并新增 `onNewIntent` 同步处理（否则第二次 `am start` 只会复用同一个 Activity，页面不切）；
+- 没有 extra 时行为不变；`flTreeRoot`/`flSearchQuery` 未做（可选）。
+
+用法：
+```
+adb shell am start -n com.hu4222.filelens/com.spacelens.app.MainActivity --es flPage clean
+adb shell am start -n com.hu4222.filelens/com.spacelens.app.MainActivity --es flPage tree
+```
+
+验收（每次都 `force-stop` 后冷启动）：
+| flPage | 结果 | 截图 |
+|---|---|---|
+| clean | PASS | `nav2-clean.png` |
+| settings | PASS | `nav2-settings.png` |
+| tree | PASS | `nav2-tree.png`（空间页 + 树图 overlay） |
+| trash | 未确认 | `nav2-trash.png` 全黑；进程存活（pid 4289）、crash buffer 无记录，疑似截图落在 Dialog 首帧 |
+
+`bench`/`crash`/`space`/`search`/`transfer` 未逐页截图验证。
+
+## 清理 28–33 / 稳定性 61–64 / 传输 42 / 预览 51
+
+NOT RUN（本轮时间全给 Debug 入口与其验收）。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 3（flPage clean/settings/tree） |
+| 未确认 | 1（flPage trash） |
+| NOT RUN | 清理 6 条、稳定性 4 条、传输 42、预览 51、R 组残留 |
+| 挂起 | F11（FIXED-UNVERIFIED） |
