@@ -1,7 +1,7 @@
 # FileLens 交接文件（新会话先读这个）
 
 > 读这一份 ≈ 3 千 token；翻聊天记录 ≈ 38 万。
-> 最后更新：2026-11-08 12:20
+> 最后更新：2026-11-08 13:02
 
 ---
 
@@ -28,13 +28,47 @@ JDK        C:\Program Files\Java\jdk-17
 ## 三、当前版本与状态
 
 ```
-当前版本   1.3.10 / versionCode 22（只加模拟器验证脚本，无业务行为变化；真机未验）
+当前版本   1.4.0 / versionCode 23（模拟器实跑：搜索 A1–A5 全部验收项、崩溃日志 12 连崩只留 10 份、
+                                   分享/删除/清空/返回键；真机未验）
 已验证版本 1.3.7 / versionCode 19（真机验过：齿轮 ✅ Shizuku 隐藏 ✅ 树图下钻 ✅
                                    六位配对码 ✅ 局域网地址 ✅ 扫码拉起相机 ✅ 本机浏览无下载按钮 ✅）
-最近提交   13febe9 chore(release): bump to 1.3.10
-           ecb6ac5 docs: add emulator verification guide
-           b196e73 tools: add emulator verification CLI
+最近提交   2aab296 fix(crash): give detail header fixed height
+           5b193d2 fix(search): keep chip row scrollable inside swipe pager
+           762f4de chore(release): bump to 1.4.0
+           67e1fa1 feat(crash): local crash log with 10-file cap and settings entry
+           f0e24fc feat(search): suffix and path match, size bands, sort and dir line
 ```
+
+### 1.4.0 两处落点（新会话按这里查）
+
+**A 搜索（`ui/SearchPage.kt`）**
+
+| # | 改动 | 位置 |
+|---|---|---|
+| A1 | 三模式互斥：`*.png`/`.png` 后缀、含 `/` 走完整路径、否则名称 | `queryMode()` / `suffixOf()`，`perform()` 内匹配 |
+| A2 | 大小四档 `<1MB` / `1–10MB` / `>10MB` / `>100MB`（`sizeMode` 1–4） | `buildChips()` |
+| A3 | 第二行改「大小 · 相对目录」，`TruncateAt.START`；根目录显示「内部存储」 | `relativeDir()`、`HitAdapter.getView()` |
+| A4 | 名称/大小/时间三选一，默认大小降序；扫描时只留最优 200 条；切排序保持列表位置 | `buildSortRow()`、`sortHits()`、`perform()` |
+| A5 | 关键词 0 结果带原文 + 路径提示；纯筛选 0 结果给「清空筛选」 | `renderStatus()`、`clearFilters()` |
+
+**B 崩溃日志**
+
+| 文件 | 作用 |
+|---|---|
+| `App.kt` + `AndroidManifest.xml` | `Application` 里安装 handler；`finally` 转调原 handler |
+| `core/CrashLog.kt` | `files/crash/crash-yyyyMMdd-HHmmss.txt`；同步写 + `fd.sync()`；最多 10 份，`File.delete` 逐个删 |
+| `ui/CrashLogPage.kt` | 列表 / 全文 / 分享 / 删除 / 清空；返回键先退全文再关页（`handleBack()`） |
+| `ui/SettingsPage.kt` | 「诊断」区，`崩溃日志 · N 份`，`onCrashLog` |
+| `MainActivity.kt` | `showCrashLogPage()`：全屏 Dialog + 返回键处理，关闭后刷新份数 |
+
+自测（模拟器 `spacelens_api34`，`tools/emu.py`）：build 通过；1.4.0/23 冷启动不崩；
+`.png` 60 项全 png、`DCIM/` 走路径提示、`zzzqqq` 提示带原文、`SpaceLensTest/` 714 项；
+`<1MB` 8941 项全部 <1MB、`1–10MB` 25 项全部 1–10MB；名称/大小/时间三种顺序都对；
+`>100MB` 0 结果显示「当前筛选条件下没有文件 + 清空筛选」；12 次人为崩溃只留 10 份，内容含版本/机型/堆栈；
+分享面板、删除单条（10→9）、清空全部（9→0）、返回键（详情→列表→设置）均通。截图在 `.tmp/emu/`。**真机未验。**
+
+> 顺带修了一个原有问题：外层 `SwipePager` 会把所有横向拖动当切页，筛选 chip 那排原本滚不动；
+> 现在在 `SearchPage` 里手指按下时 `requestDisallowInterceptTouchEvent`，不改 `SwipePager`。
 
 ### 1.3.10 新增（新会话按这里查）
 
@@ -103,11 +137,10 @@ P1-1（底部被胶囊遮挡）真机实测不成立：`.views` 已有 134px 内
 
 ## 四、下一步
 
-1.3.10 已完成（只加脚本与文档），等 1.4.0 任务书；本开发会话到此停止，不接新任务。
-新会话先读 `docs\EMU-VERIFY.md` 用模拟器验，再按任务书继续。
+1.4.0 已完成，等 1.4.1 任务书；本开发会话到此停止，不接新任务。
+新会话先按「三、1.4.0 两处落点」核对，用 `tools\emu.py` 复验，再动 1.4.1 原生文件操作。
 
 ### 已定顺序（等任务书，别提前动）
-- 1.4.0 搜索增强（路径/后缀/大小区间）+ 崩溃日志本地留存
 - 1.4.1 原生文件操作最小集（重命名 / 移动 / 新建文件夹）
 - 1.4.2 SAF 基础设施 + 自定义传输接收目录
 - 1.4.3 SAF 目录扫描 / 浏览 / 删除接入（依赖 1.4.2，顺序不能换）
