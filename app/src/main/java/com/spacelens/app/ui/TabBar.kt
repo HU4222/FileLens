@@ -39,10 +39,25 @@ class TabBar(context: Context) : View(context) {
         isClickable = true
     }
 
+    /**
+     * 胶囊高度按屏宽自适应，不再写死 72dp。
+     *
+     * 参考比例取自 411dp 宽（模拟器）上观感最好的 72dp：72 / 379 ≈ 0.19。
+     * 窄屏（如 361dp 的 PKR110）算出来约 62dp，视觉比例与模拟器一致，
+     * 不会像固定 72dp 那样显得"又矮又胖"。
+     */
+    private var barH = 0f
+
+    private fun computeBarH(w: Int): Float {
+        val capsuleW = w - 2 * Draw.dp(context, 16f)
+        return (capsuleW * 0.19f).coerceIn(Draw.dp(context, 56f), Draw.dp(context, 72f))
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec)
-        // 72dp 胶囊 + 18dp 离底，视图本身占 90dp；胶囊由 onDraw 画在底部。
-        setMeasuredDimension(w, Draw.dp(context, 90f).toInt())
+        barH = computeBarH(w)
+        // 离底间距沿用 72:18 的比例（0.25），视图高度 = 胶囊 + 间距。
+        setMeasuredDimension(w, (barH * 1.25f).toInt())
     }
 
     private fun contentLeft(): Float = Draw.dp(context, 16f)
@@ -77,13 +92,15 @@ class TabBar(context: Context) : View(context) {
         val p = Theme.palette
         val d = resources.displayMetrics.density
         val dark = p.dark
+        if (barH <= 0f) barH = computeBarH(width)
+        val gap = barH * 0.25f
         val capsule = RectF(
                 Draw.dp(context, 16f),
-                height - Draw.dp(context, 18f + 72f),
+                height - gap - barH,
                 width - Draw.dp(context, 16f),
-                height - Draw.dp(context, 18f),
+                height - gap,
         )
-        val radius = 36f * d
+        val radius = barH / 2f
         Draw.softShadow(canvas, capsule, radius, d)
         Glass.draw(canvas, capsule, radius, dark,
                 Color.argb(33, 255, 255, 255), density = d)
@@ -113,11 +130,11 @@ class TabBar(context: Context) : View(context) {
             val alpha = if (pressed) (255 * pressAlpha).toInt() else 255
             canvas.save()
             if (pressed) canvas.scale(pressScale, pressScale, cx, capsule.centerY())
-            Draw.icon(canvas, icons[i], cx, capsule.top + 23f * d,
+            Draw.icon(canvas, icons[i], cx, capsule.top + 0.32f * barH,
                     size, Theme.alpha(color, alpha), stroke)
             if (k > 0.01f) {
-                val line = RectF(cx - 8f * d, capsule.top + 40f * d,
-                        cx + 8f * d, capsule.top + 42f * d)
+                val line = RectF(cx - 8f * d, capsule.top + 0.57f * barH,
+                        cx + 8f * d, capsule.top + 0.605f * barH)
                 canvas.drawRoundRect(line, 1f * d, 1f * d,
                         Draw.fill(Theme.alpha(selectedColor, (255 * k).toInt())))
             }
@@ -125,7 +142,7 @@ class TabBar(context: Context) : View(context) {
             tp.alpha = alpha
             val label = labels[i]
             canvas.drawText(label, cx - tp.measureText(label) / 2f,
-                    capsule.bottom - 15f * d, tp)
+                    capsule.top + 0.79f * barH, tp)
             canvas.restore()
         }
     }
