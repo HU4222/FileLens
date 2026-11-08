@@ -46,6 +46,8 @@ class SearchPage(context: Context) : LinearLayout(context) {
     var onOpenLocation: ((Int) -> Unit)? = null
     var onPreview: ((Int) -> Unit)? = null
     var onDeleteRequested: ((Int) -> Unit)? = null
+    /** 1.4.1：长按结果行弹原生菜单（改名/移动/删除）。 */
+    var onItemMenu: ((Int) -> Unit)? = null
 
     private val query = EditText(context)
     private val chips = LinearLayout(context)
@@ -159,6 +161,11 @@ class SearchPage(context: Context) : LinearLayout(context) {
         }
         list.setOnItemLongClickListener { _, _, position, _ ->
             val hit = hits.getOrNull(position) ?: return@setOnItemLongClickListener false
+            val menu = onItemMenu
+            if (menu != null) {
+                menu.invoke(hit.node)
+                return@setOnItemLongClickListener true
+            }
             AlertDialog.Builder(context)
                     .setTitle(hit.name)
                     .setItems(arrayOf("删除（进回收站）", "取消")) { _, which ->
@@ -195,6 +202,14 @@ class SearchPage(context: Context) : LinearLayout(context) {
 
     fun refresh() {
         schedule(query.text?.toString()?.trim().orEmpty())
+    }
+
+    /** 文件操作改了 NodeStore 后强制重跑一次查询（签名没变也不能用缓存）。 */
+    fun refreshNow() {
+        hasResult = false
+        lastSignature = ""
+        inFlightSignature = ""
+        refresh()
     }
 
     /** 供空间分布卡跳转：按 Classifier 分类索引选中对应 chip 并立即查询。 */

@@ -443,4 +443,147 @@ object Dialogs {
         }
         sheetIn(root, d)
         dialog.show()
-    }}
+    }
+
+    data class Action(val label: String, val danger: Boolean = false, val run: () -> Unit)
+
+    /** 底部动作菜单：重命名 / 移动到… / 新建文件夹 / 删除 等。 */
+    fun showActions(activity: Activity, title: String, actions: List<Action>) {
+        val p = Theme.palette
+        val d = activity.resources.displayMetrics.density
+        val dialog = Dialog(activity)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val root = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, (10 * d).toInt(), 0, (12 * d).toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = 20 * d
+                setColor(p.panel)
+                setStroke((1 * d).toInt().coerceAtLeast(1), p.line)
+            }
+        }
+        root.addView(TextView(activity).apply {
+            text = title
+            textSize = 11f
+            setTextColor(p.muted)
+            maxLines = 1
+            setPadding((20 * d).toInt(), (8 * d).toInt(), (20 * d).toInt(), (6 * d).toInt())
+        })
+        for (action in actions) {
+            root.addView(TextView(activity).apply {
+                text = action.label
+                textSize = 15f
+                gravity = Gravity.CENTER_VERTICAL
+                setTextColor(if (action.danger) p.danger else p.text)
+                setPadding((20 * d).toInt(), 0, (20 * d).toInt(), 0)
+                setOnClickListener {
+                    dialog.dismiss()
+                    action.run()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (48 * d).toInt()))
+        }
+        root.addView(TextView(activity).apply {
+            text = "取消"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(p.muted)
+            setPadding(0, (8 * d).toInt(), 0, (8 * d).toInt())
+            setOnClickListener { dialog.dismiss() }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (44 * d).toInt()))
+        dialog.setContentView(root)
+        dialog.window?.let { win ->
+            win.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            win.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            win.setDimAmount(0.45f)
+            win.setGravity(Gravity.BOTTOM)
+        }
+        dialog.setOnShowListener {
+            dialog.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT)
+        }
+        sheetIn(root, d)
+        dialog.show()
+    }
+
+    /** 单行输入（重命名 / 新建文件夹）。onConfirm 拿到原始输入，校验由调用方做。 */
+    fun showInput(
+            activity: Activity,
+            title: String,
+            hint: String,
+            initial: String,
+            confirmLabel: String,
+            onConfirm: (String) -> Unit,
+    ) {
+        val p = Theme.palette
+        val d = activity.resources.displayMetrics.density
+        val dialog = Dialog(activity)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val root = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((22 * d).toInt(), (20 * d).toInt(), (22 * d).toInt(), (16 * d).toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = Radius.PANEL * d
+                setColor(p.panel)
+                setStroke((1 * d).toInt().coerceAtLeast(1), p.line)
+            }
+        }
+        root.addView(TextView(activity).apply {
+            text = title
+            setTextColor(p.text)
+            textSize = 17f
+            typeface = Draw.SANS_MEDIUM
+        })
+        val input = android.widget.EditText(activity).apply {
+            this.hint = hint
+            setSingleLine()
+            setTextColor(p.text)
+            setHintTextColor(p.muted)
+            setPadding(0, (10 * d).toInt(), 0, (10 * d).toInt())
+            setText(initial)
+            setSelection(0, initial.length)
+        }
+        root.addView(input)
+        val row = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(TextView(activity).apply {
+            text = "取消"
+            gravity = Gravity.CENTER
+            setTextColor(p.muted)
+            textSize = 13f
+            setOnClickListener { dialog.dismiss() }
+            layoutParams = LinearLayout.LayoutParams(0, (42 * d).toInt(), 1f)
+        })
+        row.addView(TextView(activity).apply {
+            text = confirmLabel
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            typeface = Draw.SANS_MEDIUM
+            background = GradientDrawable().apply {
+                cornerRadius = 12 * d
+                setColor(p.brand)
+            }
+            setOnClickListener {
+                val value = input.text.toString()
+                dialog.dismiss()
+                onConfirm(value)
+            }
+            layoutParams = LinearLayout.LayoutParams(0, (42 * d).toInt(), 1f)
+        })
+        root.addView(row)
+        dialog.setContentView(root)
+        dialog.window?.let { win ->
+            win.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            win.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            win.setDimAmount(0.45f)
+            win.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        }
+        dialog.setOnShowListener {
+            val w = activity.resources.displayMetrics.widthPixels
+            dialog.window?.setLayout(min(w - (36 * d).toInt(), (380 * d).toInt()),
+                    WindowManager.LayoutParams.WRAP_CONTENT)
+            input.requestFocus()
+        }
+        sheetIn(root, d)
+        dialog.show()
+    }
+}

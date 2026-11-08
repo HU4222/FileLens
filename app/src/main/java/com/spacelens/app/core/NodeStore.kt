@@ -204,8 +204,167 @@ class NodeStore(initialCapacity: Int = 65536) {
             lock.writeLock().unlock()
         }
     }
-    fun sizeOf(i: Int): Long = read { if (i in 0 until count) size[i] else 0L }
-    fun filesOf(i: Int): Int = read { if (i in 0 until count) files[i] else 0 }
+
+    // ---------------------------------------------------------------
+    // 1.4.1 局部补丁：改名 / 移动 / 新建目录，不重扫。
+    // 路径是按 parent 链现算的，所以只改节点自身，子孙路径自动跟着变。
+    // ---------------------------------------------------------------
+
+    /** 找某个目录下的同名直接子节点；找不到返回 -1。 */
+    fun findChild(parentIdx: Int, childName: String): Int = read {
+        if (parentIdx !in 0 until count) return@read -1
+        var c = firstChild[parentIdx]
+        while (c >= 0) {
+            if ((name[c] ?: "") == childName) return@read c
+            c = nextSibling[c]
+        }
+        -1
+    }
+
+    /** 按绝对路径找节点；用于只有 File 没有节点下标的入口（预览页改名）。 */
+    fun indexOfPath(rootPath: String, absolutePath: String): Int = read {
+        val root = rootPath.trimEnd('/')
+        if (root.isEmpty() || !absolutePath.startsWith(root)) return@read -1
+        val rel = absolutePath.removePrefix(root).trimStart('/')
+        if (rel.isEmpty()) return@read 0
+        var cur = 0
+        for (seg in rel.split('/')) {
+            if (seg.isEmpty()) continue
+            var c = firstChild[cur]
+            var found = -1
+            while (c >= 0) {
+                if ((name[c] ?: "") == seg) {
+                    found = c
+                    break
+                }
+                c = nextSibling[c]
+            }
+            if (found < 0) return@read -1
+            cur = found
+        }
+        cur
+    }
+
+    /** 改名：只改 name（目录进池），路径由 parent 链自动重算。 */
+    fun renameNode(index: Int, newName: String): Boolean {
+        lock.writeLock().lock()
+        try {
+            if (index <= 0 || index >= count) return false
+            name[index] = if (flags[index] and DIR != 0) {
+                namePool.getOrPut(newName) { newName }
+            } else {
+                newName
+            }
+            return true
+        } finally {
+            lock.writeLock().unlock()
+        }
+    }
+
+    /** 新建空目录：父节点聚合 +1 个目录。 */
+    fun addDir(parentIdx: Int, dirName: String, dirMtime: Long): Int {
+        lock.writeLock().lock()
+        try {
+            if (parentIdx !in 0 until count) return -1
+            if (flags[parentIdx] and DIR == 0) return -1
+            return addLocked(parentIdx, dirName, DIR, 0L, dirMtime, -1)
+        } finally {
+            lock.writeLock().unlock()
+        }
+    }
+
+    /**
+     * 移动节点到新目录：改 parent + 摘/挂 sibling 链，重算祖先聚合和子树 depth。
+     * 调用方必须先做「不能移进自己子孙」「目标同名」校验；这里再兜一次。
+     */
+    fun moveNode(index: Int, newParentIdx: Int): Boolean {
+        lock.writeLock().lock()
+        try {
+            if (index <= 0 || index >= count) return false
+            if (newParentIdx !in 0 until count) return false
+            if (flags[newParentIdx] and DIR == 0) return false
+            val oldParent = parent[index]
+            if (oldParent == newParentIdx) return false
+            var a = newParentIdx
+            while (a >= 0) {
+                if (a == index) return false
+                a = parent[a]
+            }
+            val nodeName = name[index] ?: ""
+            var c = firstChild[newParentIdx]
+            while (c >= 0) {
+                if (c != index && (name[c] ?: "") == nodeName) return false
+                c = nextSibling[c]
+            }
+
+            // 从旧父节点摘链
+            if (oldParent >= 0) {
+                if (firstChild[oldParent] == index) {
+                    firstChild[oldParent] = nextSibling[index]
+                } else {
+                    var prev = firstChild[oldParent]
+                    while (prev >= 0 && nextSibling[prev] != index) prev = nextSibling[prev]
+                    if (prev >= 0) nextSibling[prev] = nextSibling[index]
+                }
+            }
+            // 挂到新父节点头部
+            nextSibling[index] = firstChild[newParentIdx]
+            firstChild[newParentIdx] = index
+            parent[index] = newParentIdx
+
+            // 类别字节：目录用自身 catScore，文件用自身大小落到它所属类别
+            val catBytes = LongArray(7)
+            if (flags[index] and DIR != 0) {
+                for (k in 0 until 7) catBytes[k] = catScore[index * 7 + k]
+            } else {
+                val c0 = cat[index].toInt()
+                if (c0 in 0..6) catBytes[c0] = size[index]
+            }
+            val s = size[index]
+            val f = files[index]
+            val d = dirs[index]
+
+            var up = oldParent
+            while (up >= 0) {
+                size[up] = (size[up] - s).coerceAtLeast(0L)
+                files[up] = (files[up] - f).coerceAtLeast(0)
+                dirs[up] = (dirs[up] - d).coerceAtLeast(0)
+                for (k in 0 until 7) {
+                    catScore[up * 7 + k] = (catScore[up * 7 + k] - catBytes[k]).coerceAtLeast(0L)
+                }
+                up = parent[up]
+            }
+            up = newParentIdx
+            while (up >= 0) {
+                size[up] += s
+                files[up] += f
+                dirs[up] += d
+                for (k in 0 until 7) catScore[up * 7 + k] += catBytes[k]
+                up = parent[up]
+            }
+
+            // 子树 depth 跟着挪
+            val delta = (depth[newParentIdx].toInt() + 1) - depth[index].toInt()
+            if (delta != 0) {
+                val stack = java.util.ArrayDeque<Int>()
+                stack.push(index)
+                while (stack.isNotEmpty()) {
+                    val n = stack.pop()
+                    depth[n] = (depth[n].toInt() + delta).coerceIn(0, 127).toByte()
+                    var ch = firstChild[n]
+                    while (ch >= 0) {
+                        stack.push(ch)
+                        ch = nextSibling[ch]
+                    }
+                }
+            }
+            return true
+        } finally {
+            lock.writeLock().unlock()
+        }
+    }
+
+    fun sizeOf(i: Int): Long = read { if (i in 0 until count) size[i] else 0L }    fun filesOf(i: Int): Int = read { if (i in 0 until count) files[i] else 0 }
     fun dirsOf(i: Int): Int = read { if (i in 0 until count) dirs[i] else 0 }
     fun mtimeOf(i: Int): Long = read { if (i in 0 until count) mtime[i] else 0L }
     fun flagsOf(i: Int): Int = read { if (i in 0 until count) flags[i] else 0 }

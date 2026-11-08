@@ -22,6 +22,7 @@ import android.widget.Toast
 import android.widget.VideoView
 import androidx.core.content.FileProvider
 import com.spacelens.app.core.Trash
+import com.spacelens.app.core.FileOps
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.max
@@ -29,11 +30,14 @@ import kotlin.math.max
 /** 文件预览：图片/视频/文本/PDF/不支持。 */
 class PreviewPage(
         context: Context,
-        private val paths: List<String>,
+        pathsIn: List<String>,
         start: Int,
 ) : LinearLayout(context) {
 
     var onClose: (() -> Unit)? = null
+    /** 1.4.1：预览页只加“改名”，成功后通知外层打 NodeStore 补丁。 */
+    var onRenamed: ((oldPath: String, newPath: String) -> Unit)? = null
+    private val paths = pathsIn.toMutableList()
     private var index = start.coerceIn(0, max(0, paths.size - 1))
     private val stage = LinearLayout(context)
     private val name = TextView(context)
@@ -65,6 +69,7 @@ class PreviewPage(
             gravity = Gravity.CENTER
             setPadding(0, dp(8f), 0, dp(12f))
         }
+        tools.addView(button("改名") { renameCurrent() })
         tools.addView(button("删除") { deleteCurrent() })
         tools.addView(button("分享") { shareCurrent() })
         tools.addView(button("其它应用") { openCurrent() })
@@ -242,6 +247,43 @@ class PreviewPage(
             setTextColor(Color.WHITE)
         }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         stage.addView(button("用其他应用打开") { openCurrent() })
+    }
+
+    private fun renameCurrent() {
+        val activity = context as? android.app.Activity
+        if (activity == null) {
+            toast("改名失败：页面已关闭")
+            return
+        }
+        val old = File(paths[index])
+        Dialogs.showInput(activity, "重命名", "新名字", old.name, "重命名") { raw ->
+            when (val check = FileOps.checkName(raw, old.name)) {
+                FileOps.NameResult.Same -> return@showInput
+                is FileOps.NameResult.Bad -> {
+                    toast(check.message)
+                    return@showInput
+                }
+                FileOps.NameResult.Ok -> {
+                    val newName = raw.trim()
+                    val dup = FileOps.checkTarget(old.parentFile, newName)
+                    if (dup != null) {
+                        toast(dup)
+                        return@showInput
+                    }
+                    val result = FileOps.rename(old, newName)
+                    if (!result.ok) {
+                        toast(result.message)
+                        return@showInput
+                    }
+                    val newPath = File(old.parentFile, newName).absolutePath
+                    // 只改当前 index，不重建整张表
+                    paths[index] = newPath
+                    name.text = newName
+                    toast(result.message)
+                    onRenamed?.invoke(old.absolutePath, newPath)
+                }
+            }
+        }
     }
 
     private fun deleteCurrent() {

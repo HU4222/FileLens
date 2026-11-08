@@ -30,6 +30,8 @@ class TreePage(context: Context) : FrameLayout(context) {
     var onSelectAllSelection: (() -> Unit)? = null
     var onSearch: (() -> Unit)? = null
     var onFileTap: ((Int) -> Unit)? = null
+    /** 1.4.1：列表长按弹原生菜单（改名/移动/新建/多选）。 */
+    var onItemMenu: ((Int) -> Unit)? = null
 
     private val top = TopArea(context)
     private val selectionBar = SelectionBar(context)
@@ -299,8 +301,13 @@ class TreePage(context: Context) : FrameLayout(context) {
         }
         list.setOnItemLongClickListener { _: android.widget.AdapterView<*>?, _: View?, position: Int, _: Long ->
             val child = items.getOrNull(position) ?: return@setOnItemLongClickListener false
-            list.tag = true
-            onSelectionToggle?.invoke(child.index)
+            val menu = onItemMenu
+            if (menu != null) {
+                menu.invoke(child.index)
+            } else {
+                list.tag = true
+                onSelectionToggle?.invoke(child.index)
+            }
             true
         }
         top.setView(1)
@@ -320,8 +327,13 @@ class TreePage(context: Context) : FrameLayout(context) {
         refreshViews()
     }
 
-    fun showRoot(node: Int) {
-        val s = store ?: return
+    /** 从长按菜单进入多选模式，保留原来的长按多选能力。 */
+    fun selectFromMenu(node: Int) {
+        list.tag = true
+        onSelectionToggle?.invoke(node)
+    }
+
+    fun showRoot(node: Int) {        val s = store ?: return
         if (node !in 0 until s.count) return
         if (s.depthOf(node) > 6) return
         rootIndex = node
