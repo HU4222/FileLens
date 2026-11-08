@@ -38,12 +38,12 @@ class TabBar(context: Context) : View(context) {
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec)
-        // 62dp 胶囊 + 18dp 离底，视图本身占 80dp；胶囊由 onDraw 画在底部。
-        setMeasuredDimension(w, Draw.dp(context, 80f).toInt())
+        // 72dp 胶囊 + 18dp 离底，视图本身占 90dp；胶囊由 onDraw 画在底部。
+        setMeasuredDimension(w, Draw.dp(context, 90f).toInt())
     }
 
-    private fun contentLeft(): Float = Draw.dp(context, 24f)
-    private fun contentRight(): Float = width - Draw.dp(context, 24f)
+    private fun contentLeft(): Float = Draw.dp(context, 16f)
+    private fun contentRight(): Float = width - Draw.dp(context, 16f)
     private fun itemWidth(): Float = (contentRight() - contentLeft()) / labels.size
 
     fun setPage(index: Int, animate: Boolean) {
@@ -75,15 +75,20 @@ class TabBar(context: Context) : View(context) {
         val d = resources.displayMetrics.density
         val dark = p.dark
         val capsule = RectF(
-                Draw.dp(context, 12f),
-                height - Draw.dp(context, 18f + 62f),
-                width - Draw.dp(context, 12f),
+                Draw.dp(context, 16f),
+                height - Draw.dp(context, 18f + 72f),
+                width - Draw.dp(context, 16f),
                 height - Draw.dp(context, 18f),
         )
-        val radius = 31f * d
+        val radius = 36f * d
         Draw.softShadow(canvas, capsule, radius, d)
-        canvas.drawRoundRect(capsule, radius, radius, Draw.fill(Color.argb(31, 0, 0, 0)))
-        Glass.draw(canvas, capsule, radius, dark, density = d)
+        Glass.draw(canvas, capsule, radius, dark,
+                Color.argb(33, 255, 255, 255), density = d)
+        canvas.drawRoundRect(capsule, radius, radius,
+                Draw.fill(Color.argb(31, 18, 18, 28)))
+        canvas.drawLine(capsule.left + radius, capsule.top + 0.5f * d,
+                capsule.right - radius, capsule.top + 0.5f * d,
+                Draw.stroke(Color.argb(20, 255, 255, 255), 1f * d))
 
         val iw = itemWidth()
         val selectedColor = 0xFFB7B4FF.toInt()
@@ -92,20 +97,26 @@ class TabBar(context: Context) : View(context) {
             val cx = contentLeft() + iw * (i + 0.5f)
             val k = 1f - abs(progress - i).coerceIn(0f, 1f)
             val pressed = pressIndex == i
-            val color = Theme.blend(p.muted, selectedColor, k)
-            val textColor = Theme.blend(p.muted, selectedText, k)
-            val size = (18f + 4f * k) * d
+            val color = Theme.blend(0xFF8F9AB5.toInt(), selectedColor, k)
+            val textColor = Theme.blend(0xFF8F9AB5.toInt(), selectedText, k)
+            val size = (20f + 2f * k) * d
             val stroke = (1.5f + 0.5f * k) * d
             val alpha = if (pressed) (255 * pressAlpha).toInt() else 255
             canvas.save()
             if (pressed) canvas.scale(pressScale, pressScale, cx, capsule.centerY())
-            Draw.icon(canvas, icons[i], cx, capsule.top + 22f * d,
+            Draw.icon(canvas, icons[i], cx, capsule.top + 23f * d,
                     size, Theme.alpha(color, alpha), stroke)
+            if (k > 0.01f) {
+                val line = RectF(cx - 8f * d, capsule.top + 40f * d,
+                        cx + 8f * d, capsule.top + 42f * d)
+                canvas.drawRoundRect(line, 1f * d, 1f * d,
+                        Draw.fill(Theme.alpha(selectedColor, (255 * k).toInt())))
+            }
             val tp = Draw.text(context, 10f, textColor, medium = k > 0.5f)
             tp.alpha = alpha
             val label = labels[i]
             canvas.drawText(label, cx - tp.measureText(label) / 2f,
-                    capsule.bottom - 10f * d, tp)
+                    capsule.bottom - 15f * d, tp)
             canvas.restore()
         }
     }

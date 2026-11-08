@@ -1,6 +1,11 @@
 package com.spacelens.app.ui
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
 import android.view.View
 import android.view.ViewGroup
 import kotlin.math.max
@@ -21,6 +26,17 @@ class ResponsiveShell(context: Context) : ViewGroup(context) {
     private lateinit var tabBar: TabBar
     private lateinit var detailPane: DetailPane
 
+    private val bottomFade = object : View(context) {
+        private val paint = Paint()
+        override fun onDraw(canvas: Canvas) {
+            val bg = Theme.palette.bg
+            paint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(),
+                    intArrayOf(Color.TRANSPARENT, Theme.alpha(bg, 217), bg),
+                    floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+        }
+    }.apply { isClickable = false }
+
     var windowClass: WindowClass = WindowClass.COMPACT
         private set
     var tab: Int = 0
@@ -38,6 +54,7 @@ class ResponsiveShell(context: Context) : ViewGroup(context) {
         addView(detail)
         addView(top)
         addView(pager)
+        addView(bottomFade)
         addView(tabs)
     }
 
@@ -47,6 +64,7 @@ class ResponsiveShell(context: Context) : ViewGroup(context) {
         this.tab = tab
         navRail.visibility = if (cls != WindowClass.COMPACT) View.VISIBLE else View.GONE
         tabBar.visibility = if (cls == WindowClass.COMPACT) View.VISIBLE else View.GONE
+        bottomFade.visibility = tabBar.visibility
         val showDetail = Breakpoints.showDetail(widthDp(), tab)
         detailPane.visibility = if (showDetail) View.VISIBLE else View.GONE
         if (changed) requestLayout()
@@ -109,6 +127,12 @@ class ResponsiveShell(context: Context) : ViewGroup(context) {
                 MeasureSpec.makeMeasureSpec(mainW, MeasureSpec.EXACTLY),
                 MeasureSpec.makeMeasureSpec(pagerH, MeasureSpec.EXACTLY),
         )
+        if (bottomFade.visibility == View.VISIBLE) {
+            bottomFade.measure(
+                    MeasureSpec.makeMeasureSpec(mainW, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(dp(82f), MeasureSpec.EXACTLY),
+            )
+        }
 
         // 记下布局参数供 onLayout 使用
         layoutNavW = navW
@@ -142,6 +166,10 @@ class ResponsiveShell(context: Context) : ViewGroup(context) {
         topBar.layout(layoutMainLeft, top, layoutMainLeft + layoutMainW, top + layoutTopH)
         pager.layout(layoutMainLeft, top + layoutTopH,
                 layoutMainLeft + layoutMainW, top + layoutTopH + layoutPagerH)
+        if (bottomFade.visibility == View.VISIBLE) {
+            bottomFade.layout(layoutMainLeft, top + layoutAvailableH - dp(82f),
+                    layoutMainLeft + layoutMainW, top + layoutAvailableH)
+        }
         if (tabBar.visibility == View.VISIBLE) {
             tabBar.layout(layoutMainLeft, top + layoutAvailableH - layoutTabH,
                     layoutMainLeft + layoutMainW, top + layoutAvailableH)
