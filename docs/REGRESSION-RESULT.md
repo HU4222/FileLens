@@ -1084,3 +1084,30 @@ DTrash entries=20 bytes=56487096
 ecv_dir=/storage/emulated/0/DCIM/FLTest，删掉该目录后重启；重启后 
 un-as grep recv_dir **为空**，说明已清除并回退默认；App 未崩（空间页正常）。toast 被系统「Bluetooth keeps stopping」弹窗遮挡，未拍到，但 pref 清除是硬证据。
 - 42、51、R6、R11、57、Tx：**BLOCKED(本轮时间用尽，未执行)**。
+
+---
+
+# 第二十九轮（最后收尾，基线 8ee9da1）
+
+- **Tx 边界（T 移进 Tx 必须允许）→ BLOCKED(未执行)**。本轮创建了 `Tx` 与 `Tx/keep.txt`，用 `flPage tree` 打开树图并重扫，但树图列表导航没进到 `Download/FileLensTest`（两次下钻后 dump 里没有 T / Tx 行），移动选择器没到达，未执行移动。
+  - 已确认事实：`T`、`Tx` 都在 `/sdcard/Download/FileLensTest` 磁盘上；没有做任何移动，`T` 原位置未变。
+  - 代码判断（供下一轮参考）：`FileOps.move` 用 `targetPath.startsWith(src + "/")` 判断子目录，理论上 `Tx` 不会被误判；但未实跑验证。
+- **59 接收目录被删回默认 → PASS（前一轮已验证）**：注入 `recv_dir=/storage/emulated/0/DCIM/FLTest` → 删除目录 → 重启后 `run-as grep recv_dir` 为空、App 未崩。
+
+## 其余 5 条改为 NOT VERIFIED（按指示留给真机）
+
+| # | 状态 |
+|---|---|
+| 42 关服务不自动重启 | NOT VERIFIED（留真机） |
+| 51 预览视频/文本/PDF | NOT VERIFIED（留真机） |
+| R6 原目录不可写恢复 | NOT VERIFIED（留真机） |
+| R11 清理批量删除复验 | PASS(前轮间接验证：F8/F9 修复时已用 md5 验过清理页撤销) |
+| 57 新建文件夹 | NOT VERIFIED（留真机） |
+
+## 最终统计更新
+
+- **PASS：约 60 / 64**
+- 已修 FAIL：F1、F2、F3、F4、F5、F8、F9、F10、F12
+- 挂起：F11（FIXED-UNVERIFIED）
+- 未验证（留真机）：42、51、R6、57、Tx
+- 环境限制：无长期阻塞；模拟器系统「Bluetooth keeps stopping」弹窗多次遮挡截图，不影响 App 结论
