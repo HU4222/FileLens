@@ -37,6 +37,8 @@ class CleanPage(context: Context) : LinearLayout(context) {
 
     var store: NodeStore? = null
     var rootPath: String = ""
+    /** 批量删除成功后的 batchId，交给 MainActivity 弹 5 秒撤销条。 */
+    var onBatchDeleted: ((String) -> Unit)? = null
 
     private val segmentBar = LinearLayout(context)
     private val dupChip = TextView(context)
@@ -639,12 +641,14 @@ class CleanPage(context: Context) : LinearLayout(context) {
         }
         if (targets.isEmpty()) return
         garbageDelete.isEnabled = false
+        val batch = Trash.batchId()
         Thread({
-            val result = Trash.move(context, targets.map { it.first to it.second })
+            val result = Trash.move(context, targets.map { it.first to it.second }, batch)
             val moved = targets.filter { !it.first.exists() }.map { it.third }.toIntArray()
             if (moved.isNotEmpty()) snapshot.markDeleted(moved)
             handler.post {
-                toast(if (result.skipped > 0) "已移入 ${result.moved} 项，跳过 ${result.skipped} 项" else "已移入回收站 ${result.moved} 项")
+                if (result.moved > 0) onBatchDeleted?.invoke(batch)
+                else toast(if (result.skipped > 0) "已移入 ${result.moved} 项，跳过 ${result.skipped} 项" else "已移入回收站 ${result.moved} 项")
                 startGarbageScan()
             }
         }, "FileLens-GarbageTrash").start()
@@ -1115,12 +1119,14 @@ class CleanPage(context: Context) : LinearLayout(context) {
         if (targets.isEmpty()) return
         delete.isEnabled = false
         status.text = "正在移入回收站…"
+        val batch = Trash.batchId()
         Thread({
-            val result = Trash.move(context, targets.map { it.first to it.second })
+            val result = Trash.move(context, targets.map { it.first to it.second }, batch)
             val moved = targets.filter { !it.first.exists() }.map { it.third }.toIntArray()
             if (moved.isNotEmpty()) snapshot.markDeleted(moved)
             handler.post {
-                toast(if (result.skipped > 0) "已移入 ${result.moved} 个，跳过 ${result.skipped} 个" else "已移入回收站 ${result.moved} 个")
+                if (result.moved > 0) onBatchDeleted?.invoke(batch)
+                else toast(if (result.skipped > 0) "已移入 ${result.moved} 个，跳过 ${result.skipped} 个" else "已移入回收站 ${result.moved} 个")
                 startScan()
             }
         }, "FileLens-CleanTrash").start()

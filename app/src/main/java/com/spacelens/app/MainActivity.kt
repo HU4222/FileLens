@@ -380,6 +380,10 @@ class MainActivity : Activity() {
         searchPage.onDeleteRequested = { node -> deleteSingle(node) }
         searchPage.onItemMenu = { node -> showItemMenu(node, false) }
         cleanPage.store = store
+        cleanPage.onBatchDeleted = { batch ->
+            lastTrashBatch = batch
+            showUndoBar()
+        }
         cleanPage.rootPath = rootPath()
         benchPage.onStart = { seconds -> startBench(seconds) }
         benchPage.onCancel = {
