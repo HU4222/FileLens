@@ -960,3 +960,47 @@ NOT RUN（本轮时间全给 Debug 入口与其验收）。
 | 未确认 | 1（flPage trash） |
 | NOT RUN | 清理 6 条、稳定性 4 条、传输 42、预览 51、R 组残留 |
 | 挂起 | F11（FIXED-UNVERIFIED） |
+
+---
+
+# 第二十五轮（1.4.2，基线 0f9fd7a）
+
+## A. `flPage trash` 黑屏
+
+结论：**首帧没画完**，不是真黑屏。
+- `force-stop` → `am start --es flPage trash` → 等 3s 截图，回收站正常列出 `a.txt`、`c.txt` 等条目与「恢复」按钮（`r25-trash.png`），dump 有标题「回收站/清空/关闭」；
+- 进程存活，无 FATAL。
+状态：`PASS(需等待首帧)`；已在 EMU-VERIFY 注明。
+
+## B. 清理 28–33
+
+| # | 结果 | 证据 |
+|---|---|---|
+| 28 重复文件 | PASS | `flPage clean` 直接落在清理页：3 组 · 可释放 28.0 MB；第 1 组 5.00MB×6 份，显示路径（SpaceLensTest/安装包、Download/FileLensTest 等）与大小：`c28-dup.png` |
+| 29 应用占用 | BLOCKED | 点「应用占用」（446,297 / 448,354 都试过）页面仍停在「重复文件」，拿不到该段数据 |
+| 30 垃圾建议 | BLOCKED | 同上，点「垃圾建议」也不切换 |
+| 31 三段切换 | BLOCKED | 只能截到重复文件终态；切换本身没触发 |
+| 32 删除选中 | PASS | 点「删除选中（进回收站）」→ 出现确认框「删除选中文件 / 将把 7 个文件移入回收站 / 长按 800ms / 取消」：`c32b.png` |
+| 33 Shizuku 字样 | PASS | 清理页 dump 21 条文本，`grep -i shizuku` 无命中（`no-shizuku`） |
+
+## C. 稳定性
+
+| # | 结果 | 数据 |
+|---|---|---|
+| 61 切 5 Tab ×10 | NOT RUN | 时间用尽 |
+| 62 冷启动 3 次 | PASS | `am start -W` TotalTime：**3811ms / 3551ms / 3911ms** |
+| 63 全盘扫描耗时 | PASS（引用历史日志） | 本轮未重扫；最近一次 `scan finished files=9118 dirs=166 elapsedMs=4235`（SpaceLens 日志） |
+| 64 旋转 | PASS | `user_rotation=1` 截图 `r25-rotate.png`：rail + 内容 + 右侧详情栏正常，无错位、进程存活；已恢复 `user_rotation=0` |
+
+## D. 传输 42 / 预览 51
+
+NOT RUN。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 7（trash 首帧、28、32、33、62、63、64） |
+| BLOCKED | 3（29、30、31 段切换点不动） |
+| NOT RUN | 61、42、51 |
+| 挂起 | F11（FIXED-UNVERIFIED） |
