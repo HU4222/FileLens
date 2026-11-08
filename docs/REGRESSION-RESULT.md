@@ -454,3 +454,40 @@ NOT RUN（本轮时间用尽）。
 | PASS | 3（F9、#15、#19） |
 | FAIL | 0 |
 | NOT RUN | R3、R4（+ 传输页 34–39） |
+
+---
+
+# 第十轮（1.4.2，基线 b2e8774）
+
+## 传输页 34–39（PASS 6 条）
+
+前置：`MANAGE_EXTERNAL_STORAGE=allow`；Wi-Fi 地址 `10.0.2.15:8848`。
+
+| # | 项 | 结果 | 证据 |
+|---|---|---|---|
+| 34 | 服务默认关闭 | PASS | 冷启动进传输页，dump 有「传输服务未开启」「开启传输服务」：`.tmp/emu/t34-closed.png` |
+| 35 | 开启后落在「我的」，不弹面板 | PASS | 点开启后截图 `t35-on.png`；CDP 查 `.view.is-active` = `view-about` |
+| 36 | 局域网地址不是 127.0.0.1 | PASS | 页面显示 `http://10.0.2.15:8848`；`adb shell ip addr` eth0 = `10.0.2.15/8` |
+| 37 | 二维码 + 6 位配对码 | PASS | `curl /qr.png?text=http%3A%2F%2F10.0.2.15%3A8848` → 200 `image/png` 1686 字节；截图配对码 `191193` |
+| 38 | 电脑可访问 | PASS | `adb forward 8848`；`GET /` 200 HTML 20974 字节；PIN 登录后 `/api/list` 200 JSON、`/api/config` 200；未登录 `/api/list` 401 |
+| 39 | 本机浏览无下载按钮 | PASS | CDP：`document.querySelectorAll('[data-act="download"]').length` = **0**；`location.host` = `127.0.0.1:8848` |
+
+## 传输页 40–42
+
+NOT RUN（本轮时间用尽）。
+
+## R3 相册 / 系统回收站
+
+NOT RUN（本轮先做了可稳定用 curl/CDP 的传输组；R3 需要真机行为验证，下一轮第一件）。
+
+## R4 预览删除 + #50 / #49
+
+NOT RUN。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 6（传输 34–39） |
+| FAIL | 0 |
+| NOT RUN | R3、R4、传输 40–42 |
