@@ -1,14 +1,14 @@
 # FileLens 交接文件（新会话先读这个）
 
 > 读这一份 ≈ 3 千 token；翻聊天记录 ≈ 38 万。
-> 最后更新：2026-11-08 10:27
+> 最后更新：2026-11-08 11:00
 
 ---
 
 ## 一、这是什么
 
 Android 文件管理 App，包名 `com.hu4222.filelens`。
-四个主 Tab + 设置：**空间 / 搜索 / 清理 / 传输 / 设置**。
+五个主 Tab：**空间 / 搜索 / 清理 / 传输 / 设置**。
 
 ## 二、工程与构建
 
@@ -27,12 +27,26 @@ JDK        C:\Program Files\Java\jdk-17
 ## 三、当前版本与状态
 
 ```
+当前版本   1.3.7 / versionCode 19（已构建、已安装冷启动不崩；真机验收未回）
 已验证版本 1.3.6 / versionCode 18（真机验过：渐变淡出 ✅ 回收站进入 ✅ 底栏五项 ✅）
-在飞版本   1.3.7 / versionCode 19（已下发，未回）
-最近提交   2672fba 渐变改到 SwipePager.dispatchDraw + 回收站整行可点
-           bca0a18 相机权限回调修复
-           92a3f54 交接文件
+最近提交   660026f chore(release): bump to 1.3.7
+           54b0ff7 fix(clean): hide shizuku block unless binder is detected
+           059f916 feat(clean): animate segment and sort changes
+           67bd3f5 feat(ui): expand tree and bench overlays from tapped card
+           633e064 fix(ui): draw outlined gear icon for settings tab
 ```
+
+### 1.3.7 五项落点（新会话按这里查）
+
+| # | 改在哪个文件 / 函数 |
+|---|---|
+| P1-1 设置齿轮 | `ui/Draw.kt` 的 `Icon.SETTINGS` 分支：外圈 + 8 短齿 + 中心空心圆，描边 |
+| P1-2 树图/测速扩张 | `ui/OverviewPage.kt` 的 `Content.quickCardRectOnScreen()`、`lastQuickCardRectOnScreen()`；`MainActivity.kt` 的 `showTreeOverlay()` / `hideTreeOverlay()` / `showBenchOverlay()` / `hideBenchOverlay()` |
+| P1-3 清理三段 | `ui/CleanPage.kt` 的 `selectSegment()`：18% 宽横向位移 + alpha 0.4→1，200ms |
+| P1-4 应用排序 | `ui/CleanPage.kt` 的 `buildAppSection()` 内两个排序 chip 点击监听：纵向 8dp + alpha 0.5→1，160ms |
+| P1-5 Shizuku | `ui/CleanPage.kt` 的 `init` 初始 GONE、`onShown()` 刷新、`refreshShizuku()` 仅 AUTHORIZED 时 VISIBLE |
+
+1.3.7 自测：build 通过；`am start` 冷启动无 FATAL；底栏设置 Tab 能打开设置页。功能验收未做。
 
 ### 1.3.6 已验过的事实（别重复验）
 - 渐变淡出：画在 `SwipePager.dispatchDraw()`，在子页面之后绘制 → z 序正确
@@ -43,15 +57,10 @@ JDK        C:\Program Files\Java\jdk-17
 **不要靠截图估算坐标去点控件。** 必须先 `adb shell uiautomator dump` 拿真实 `bounds` 再 tap。
 我因为按缩放比换算坐标，三次把「点偏了」误判成「点击失效」，白让开发改了两轮。
 
-## 四、下一步要做的（1.3.7 队列，已下发）
+## 四、下一步
 
-| # | 项 | 要点 |
-|---|---|---|
-| 1 | 设置图标画成太阳了 | `Draw.kt:217` 现在是中心圆+8 条放射线，要改成描边齿轮（外圈+8 短齿+中心空心圆），**必须描边不能实心**，否则选中态实心/空心区分失效 |
-| 2 | 空间树/测速扩张动画 | 从被点卡片矩形放大到全屏，280ms，曲线 `cubic-bezier(.22,.9,.3,1)`，**必须布局完成再播**（宁可慢 100ms 不露白） |
-| 3 | 清理页三段横切 | 200ms，位移 0.18 屏宽 + alpha 0.4→1 |
-| 4 | 应用占用排序切换 | 160ms，纵向 8dp 浮入，不做横向 |
-| 5 | Shizuku 条件显示 | 检测不到就 `GONE`，不显示「未安装」 |
+1.3.7 五项已实现，等待用户真机验收；本开发会话到此停止，不接新任务。
+新会话先按「三、1.3.7 五项落点」核对代码，再按用户新任务书继续。
 
 ### 更后面的（没排期，等用户定）
 - 照片清理（方案在 `docs/PHOTO-CLEAN-PLAN.md`，P1 一周）
