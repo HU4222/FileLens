@@ -73,6 +73,9 @@ python tools\emu.py stop
 - `02-without-perm`：提示条「需要文件访问权限才能扫描 · 去设置」出现，且不压住「安装包 / 压缩包」
 - `03-restored`：提示条消失
 
+> 如果 `shot` 出来是纯白/纯黑，说明 App 还在首帧绘制：先
+> `python tools\emu.py wait 2` 再截一次。`launch` 只固定等 2 秒，冷启动时偶发不够。
+
 ## 四、命令一览
 
 | 命令 | 说明 |
