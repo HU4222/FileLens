@@ -52,27 +52,6 @@ class OverviewPage(context: Context) : FrameLayout(context) {
         scroll.isVerticalScrollBarEnabled = false
         scroll.addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        val settings = TextView(context).apply {
-            text = "设置"
-            textSize = 11f
-            gravity = android.view.Gravity.CENTER
-            setTextColor(Theme.palette.text2)
-            setPadding((10 * resources.displayMetrics.density).toInt(),
-                    (6 * resources.displayMetrics.density).toInt(),
-                    (10 * resources.displayMetrics.density).toInt(),
-                    (6 * resources.displayMetrics.density).toInt())
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 14 * resources.displayMetrics.density
-                setColor(Theme.alpha(Theme.palette.panel, 220))
-                setStroke(1, Theme.palette.line)
-            }
-            setOnClickListener { onSettings?.invoke() }
-        }
-        val gearLp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-        gearLp.gravity = android.view.Gravity.TOP or android.view.Gravity.END
-        gearLp.topMargin = (12 * resources.displayMetrics.density).toInt()
-        gearLp.rightMargin = (16 * resources.displayMetrics.density).toInt()
-        addView(settings, gearLp)
         scanGate.apply {
             text = "需要文件访问权限才能扫描  ·  去设置"
             textSize = 11f

@@ -3,7 +3,10 @@ package com.spacelens.app.ui
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Shader
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -74,6 +77,16 @@ class TabBar(context: Context) : View(context) {
         val p = Theme.palette
         val d = resources.displayMetrics.density
         val dark = p.dark
+        // 内容淡出：在 TabBar 自己这层覆盖内容，保证不会被页面盖住。
+        val fadeTop = height - Draw.dp(context, 82f)
+        val bg = Theme.palette.bg
+        val fade = Paint().apply {
+            shader = LinearGradient(0f, fadeTop.toFloat(), 0f, height.toFloat(),
+                    intArrayOf(Color.TRANSPARENT, Theme.alpha(bg, 217), bg),
+                    floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+        }
+        canvas.drawRect(0f, fadeTop.toFloat(), width.toFloat(), height.toFloat(), fade)
+
         val capsule = RectF(
                 Draw.dp(context, 16f),
                 height - Draw.dp(context, 18f + 72f),
