@@ -309,6 +309,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
         appSection.addView(usageGate, LayoutParams(LayoutParams.MATCH_PARENT, dp(210f)))
 
         buildShizukuCard()
+        shizukuCard.visibility = View.GONE
         appSection.addView(shizukuCard, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         sortRow.orientation = HORIZONTAL
@@ -685,6 +686,7 @@ class CleanPage(context: Context) : LinearLayout(context) {
     }
 
     fun onShown() {
+        refreshShizuku()
         if (segment == 1) {
             onAppSelected()
             return
