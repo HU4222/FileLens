@@ -215,15 +215,16 @@ object Draw {
                 }
             }
             Icon.SETTINGS -> {
-                canvas.drawCircle(12f, 12f, 3.2f, p)
+                // 描边齿轮：外圈 + 8 个短齿 + 中心空心圆，避免看起来像太阳。
+                canvas.drawCircle(12f, 12f, 7.5f, p)
                 for (a in 0 until 8) {
-                    val rad = Math.toRadians(a * 45.0)
-                    val x1 = 12f + kotlin.math.cos(rad).toFloat() * 6.2f
-                    val y1 = 12f + kotlin.math.sin(rad).toFloat() * 6.2f
-                    val x2 = 12f + kotlin.math.cos(rad).toFloat() * 9.2f
-                    val y2 = 12f + kotlin.math.sin(rad).toFloat() * 9.2f
-                    canvas.drawLine(x1, y1, x2, y2, p)
+                    val rad = Math.toRadians(a * 45.0 + 22.5)
+                    val c = kotlin.math.cos(rad).toFloat()
+                    val s = kotlin.math.sin(rad).toFloat()
+                    canvas.drawLine(12f + c * 7.4f, 12f + s * 7.4f,
+                            12f + c * 9.2f, 12f + s * 9.2f, p)
                 }
+                canvas.drawCircle(12f, 12f, 2.6f, p)
             }
             Icon.INFO -> {
                 canvas.drawCircle(12f, 12f, 9f, p)
