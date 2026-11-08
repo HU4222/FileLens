@@ -207,7 +207,7 @@ class MainActivity : Activity() {
                 val es = Trash.entries(this)
                 android.util.Log.i("FileLensDump",
                         "DTrash entries=${es.size} bytes=${es.sumOf { it.size }}")
-            }, 1200L)
+            }, 6000L)
         }
     }
 
