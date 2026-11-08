@@ -1,7 +1,7 @@
 # FileLens 交接文件（新会话先读这个）
 
 > 读这一份 ≈ 3 千 token；翻聊天记录 ≈ 38 万。
-> 最后更新：2026-11-08 13:02
+> 最后更新：2026-11-08 13:40
 
 ---
 
@@ -28,16 +28,42 @@ JDK        C:\Program Files\Java\jdk-17
 ## 三、当前版本与状态
 
 ```
-当前版本   1.4.0 / versionCode 23（模拟器实跑：搜索 A1–A5 全部验收项、崩溃日志 12 连崩只留 10 份、
-                                   分享/删除/清空/返回键；真机未验）
+当前版本   1.4.1 / versionCode 24（模拟器实跑：重命名/移动/新建、越界移动拦截、接收目录切换+上传+回退；
+                                   真机未验）
 已验证版本 1.3.7 / versionCode 19（真机验过：齿轮 ✅ Shizuku 隐藏 ✅ 树图下钻 ✅
                                    六位配对码 ✅ 局域网地址 ✅ 扫码拉起相机 ✅ 本机浏览无下载按钮 ✅）
-最近提交   2aab296 fix(crash): give detail header fixed height
-           5b193d2 fix(search): keep chip row scrollable inside swipe pager
-           762f4de chore(release): bump to 1.4.0
-           67e1fa1 feat(crash): local crash log with 10-file cap and settings entry
-           f0e24fc feat(search): suffix and path match, size bands, sort and dir line
+最近提交   d5dc901 chore(release): bump to 1.4.1
+           f9b5955 feat(transfer): customizable receive directory with writable probe
+           facea13 feat(files): rename, move and new folder with local snapshot patch
 ```
+
+### 1.4.1 落点（新会话按这里查）
+
+**原生文件操作**
+
+| 入口 | 支持 |
+|---|---|
+| 搜索结果长按 | 重命名 / 移动到… / 删除 |
+| 树图列表长按 | 重命名 / 移动到… / 新建文件夹（创建在当前目录，根层不给）/ 多选 |
+| 预览页「改名」 | 只改名，改完更新 `paths[index]` 与标题 |
+
+- 校验/执行：`core/FileOps.kt`——空名、`.`/`..`、`/ \ : * ? " < > |`、trim、同名直接关、同目录已存在拒绝；移动查自身子孙/目标同名/同目录/跨卷
+- 菜单与输入框：`ui/Dialogs.kt` 的 `showActions()` / `showInput()`
+- 目录选择器：`ui/DirPicker.kt`（只列目录，有 NodeStore 走树、没有退回 File）
+- 撤销：复用底部 5 秒条（`showActionUndo()`），重命名/移动可反向
+- P5 局部刷新：`NodeStore.renameNode()/moveNode()/addDir()/findChild()/indexOfPath()`；路径按 parent 链重算，**不重扫**，页面重读同一 store
+
+**接收目录**
+
+- `core/RecvDir.kt`：默认 `Download/FileLens`；Prefs 存绝对路径；每次使用校验存在+可写，坏掉回默认
+- `TransferService.recvRoot()` 走 `RecvDir.resolve()`
+- 网页「我的」接收目录行：注入点击 → `pickRecvDir()` 桥；选完直接改 DOM 两处路径，不依赖切页
+- 写探针 `.fl_probe` 只在 `RecvDir.probe()`；新增代码里唯一 `File.delete()`
+
+1.4.1 自测（模拟器）：重命名成功、同名拒绝、含 `/` 拒绝并指出字符；移动成功（源没、目标有、搜索行目录跟着变）；
+文件夹移进自己子目录被拒；新建文件夹出现在当前列表且能进入；接收目录改 DCIM 后网页立即显示新路径、
+`curl` 上传文件落在 DCIM；删掉 DCIM 重启 → 回默认 + toast。
+**未测：预览页改名、撤销按钮点击、跨存储卡移动、菜单多选、恢复默认按钮。真机未验。**
 
 ### 1.4.0 两处落点（新会话按这里查）
 
@@ -137,12 +163,11 @@ P1-1（底部被胶囊遮挡）真机实测不成立：`.views` 已有 134px 内
 
 ## 四、下一步
 
-1.4.0 已完成，等 1.4.1 任务书；本开发会话到此停止，不接新任务。
-新会话先按「三、1.4.0 两处落点」核对，用 `tools\emu.py` 复验，再动 1.4.1 原生文件操作。
+1.4.1 已完成；**暂停新功能，转全量回归测试**，等用户的回归清单逐条执行。
+新会话先按「三、1.4.1 落点」核对，用 `tools\emu.py` 复验，再按回归清单填结果。
 
-### 已定顺序（等任务书，别提前动）
-- 1.4.1 原生文件操作最小集（重命名 / 移动 / 新建文件夹）
-- 1.4.2 SAF 基础设施 + 自定义传输接收目录
+### 已定顺序（暂停，等回归后再说）
+- 1.4.2 SAF 基础设施 + 自定义传输接收目录（已并入 1.4.1 的接收目录部分）
 - 1.4.3 SAF 目录扫描 / 浏览 / 删除接入（依赖 1.4.2，顺序不能换）
 
 ### 更后面的（没排期，等用户定）
