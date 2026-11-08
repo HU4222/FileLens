@@ -100,7 +100,9 @@ AGENTS.md                  给开发 agent 的硬约束
 
 - 开发在 **DSH** 里跑，用桥通信：`node tools\bridge_api.mjs POST /api/dsh-bridge/prompt '{"sessionId":"...","text":"..."}'`
 - 派任务用 `node tools\dsh_send.mjs <sessionId> <md文件> steer`
-- 桥当前版本 0.6.3，会话 `session-0b986ca7-9f3c-47d7-bbf3-2c20b34ab154`
+- 桥当前版本 0.6.3
+- **当前开发会话 `session-097f03fd-e12f-499b-b3fa-36ef37308e8f`**（2026-11-08 11:15 起用）
+- 旧会话 `session-0b986ca7-9f3c-47d7-bbf3-2c20b34ab154` **已归档**（5.48 亿 token，从侧边栏隐藏，仅作追溯，不要再往里派活）
 - **桥的事件流对 steer 发起的轮次不报** → 改为读会话日志：
   `~/.dsh/sessions/--E-deepseek~5DE5~4F5C~533A--/<sid>/session.v4.jsonl.zstd`
 - 思考强度切换：`tools\effort.bat high|max`（改配置，需重启 DSH 生效）
