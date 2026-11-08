@@ -169,3 +169,40 @@ python tools\emu.py launch
 
 - F5 的接线是对的（撤销条能出现），但 F2 的「位置」问题在清理页再次出现；这类问题必须换层（独立窗口/更高位置），不能只靠 ringToFront。
 - 下轮优先：F7 布局修复 + R5 重跑；然后 R3、R4，再进空间页。
+
+
+---
+
+# 第四轮（1.4.2，基线 be43218）
+
+## F7 换层改造 → 已实现，**未通过实跑验收**
+
+改动（MainActivity）：
+- 新增 undoLayer（FrameLayout 浮层），内含 undoBar，isClickable=true，elevation=24dp；
+- showUndoLayer()：isibility=VISIBLE → ringToFront() → placeUndoLayer()（按 	abBar 顶边动态算 ottomMargin，上移 16dp）→ 淡入 + 上移 12dp 动画 → 5 秒后 hideUndoLayer()；
+- 
+unPendingUndo() 统一处理点击：先隐藏再执行改名/移动的 action 或 undoDelete()；
+- 各页面仍统一走 showUndoBar()/showActionUndo()，不再各自维护。
+
+实测情况：
+- 代码可编译、冷启动存活（pid 4376，无本应用 FATAL），新 APK SHA-256 D4E96D74…C577。
+- **但没完成「点撤销 → 文件回来」的验收**：本轮自动化在清理页反复遇到 Tab 状态残留 + IME 弹出，删除流程多次跑到错误页面（.tmp/emu/150-layer-bar.png 实为清理页 + 键盘），无法稳定复现「删除 3 项 → 点撤销」。
+- 旧构建下的反证仍在：.tmp/emu/143-after-undo.png 显示点撤销条位置弹出了「删除选中文件」确认框（18 个文件），说明当时触摸确实穿到下层；新浮层是否修好**未证实**。
+
+状态：FAIL（换层已实现，验收未通过/未完成）。下一轮第一件事就是重新跑这条，不要在代码上继续加假设。
+
+## R3 / R4 / 空间页 12–19 / F6 → NOT RUN
+
+本轮时间全部耗在 F7 与自动化稳定性上，其余条目未执行。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 0 |
+| FAIL | 1（F7 验收未完成） |
+| NOT RUN | R3、R4、空间 12–19、F6 |
+
+## 备注
+
+- 这轮暴露的是**测试脚本对 Tab 状态/IME 的假设不可靠**（App 启动会保留上次 Tab，	ap 2192 不一定切到预期页）。下轮先 orce-stop + 冷启动，并用 dump 确认当前页标题后再操作。
