@@ -1,7 +1,7 @@
 # FileLens 交接文件（新会话先读这个）
 
 > 读这一份 ≈ 3 千 token；翻聊天记录 ≈ 38 万。
-> 最后更新：2026-11-08 11:50
+> 最后更新：2026-11-08 12:05
 
 ---
 
@@ -28,15 +28,24 @@ JDK        C:\Program Files\Java\jdk-17
 ## 三、当前版本与状态
 
 ```
-当前版本   1.3.8 / versionCode 20（自测：build 通过、冷启动不崩、传输页/浏览页能打开；
-                                   三项功能待真机验收）
+当前版本   1.3.9 / versionCode 21（自测：build 通过、模拟器冷启动不崩、空间页能开；
+                                   权限提示随真实权限开关；真机未验，手机离线）
 已验证版本 1.3.7 / versionCode 19（真机验过：齿轮 ✅ Shizuku 隐藏 ✅ 树图下钻 ✅
                                    六位配对码 ✅ 局域网地址 ✅ 扫码拉起相机 ✅ 本机浏览无下载按钮 ✅）
-最近提交   1bd59aa chore(release): bump to 1.3.8
-           f5f6e3f feat(transfer): dim page while floating balls expand
-           10cd756 feat(transfer): label root breadcrumb as internal storage
-           9805e29 fix(transfer): unify refresh and qr button fill
+最近提交   e2ed8c2 chore(release): bump to 1.3.9
+           8154e65 fix(space): reserve room for the scan permission gate
+           3834899 fix(space): bind scan permission gate to real access
 ```
+
+### 1.3.9 两处落点（新会话按这里查）
+
+| # | 改动 | 位置 |
+|---|---|---|
+| P1-1 提示状态 | 新增 `syncScanGate()`：有权限 hide、无权限 show；`onResume()` 末尾 + `selectTab()`/`onPageSettled()` 的空间页分支各调一次 | `MainActivity.kt:689-695`、`onResume()`、`selectTab()`、`onPageSettled()` |
+| P1-2 提示让位 | 提示显示时给 `scroll` 加底部 `padding = 96dp + 提示高 + 12dp`；隐藏时归 0；`addOnLayoutChangeListener` 校正首次量到 0 的情况 | `ui/OverviewPage.kt` `showScanPermissionGate()` / `hideScanPermissionGate()` / `applyGatePad()` |
+
+1.3.9 自测（仅模拟器）：build 通过；冷启动 pid 存活、crash 缓冲无本应用 FATAL；无权限进空间页提示出现，
+`appops allow` 后回前台提示消失且 padding 归零。**真机未验。**
 
 ### 1.3.8 三处落点（新会话按这里查）
 
@@ -73,10 +82,19 @@ P1-1（底部被胶囊遮挡）真机实测不成立：`.views` 已有 134px 内
 **不要靠截图估算坐标去点控件。** 必须先 `adb shell uiautomator dump` 拿真实 `bounds` 再 tap。
 我因为按缩放比换算坐标，三次把「点偏了」误判成「点击失效」，白让开发改了两轮。
 
+### 已知不一致（别当 bug 修）
+
+- 存储权限判断有三套写法：
+  - `SettingsPage.kt:190`：SDK >= 30 → `isExternalStorageManager()`，否则查 `READ_EXTERNAL_STORAGE`
+  - `MainActivity.kt:680`：SDK >= 30 → `isExternalStorageManager()`，否则 `false`
+  - `TransferService.kt:87`：`SDK_INT < 30 || isExternalStorageManager()`
+  API 26–29 上 `TransferService` 会无条件认为有权限。主路径被 `hasReadAccess()` 兜住，minSdk 26 没出过问题；
+  **不要单独改这一处**，要统一就三处一起改，否则传输服务的存储根会跟着变。
+
 ## 四、下一步
 
-1.3.8 三项已实现，等待用户真机验收；本开发会话到此停止，不接新任务。
-新会话先按「三、1.3.8 三处落点」核对代码，再按用户新任务书继续。
+1.3.9 两处已实现，等待用户真机验收；本开发会话到此停止，不接新任务。
+新会话先按「三、1.3.9 两处落点」核对代码，再按用户新任务书继续。
 
 ### 更后面的（没排期，等用户定）
 - 照片清理（方案在 `docs/PHOTO-CLEAN-PLAN.md`，P1 一周）
