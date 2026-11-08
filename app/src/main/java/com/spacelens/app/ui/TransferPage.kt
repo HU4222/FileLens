@@ -720,6 +720,19 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 try{window.__dlNative.scanQr()}catch(e){}
               },true);
             })();
+            (function(){
+              if(window.__flCrumbHooked)return; window.__flCrumbHooked=true;
+              var cb=document.getElementById('crumbs');
+              if(!cb)return;
+              function fix(){
+                var f=cb.querySelector('.crumb');
+                if(!f||f.textContent.trim()!=='/')return;
+                f.textContent='内部存储';
+              }
+              new MutationObserver(fix).observe(cb,
+                {childList:true,subtree:true,characterData:true});
+              fix();
+            })();
         """.trimIndent()
         view?.evaluateJavascript(js, null)
     }
