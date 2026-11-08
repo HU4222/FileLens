@@ -10,6 +10,7 @@ import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.view.ViewGroup
@@ -103,6 +104,14 @@ class SearchPage(context: Context) : LinearLayout(context) {
         val scroller = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             clipToPadding = false
+            // 外层 SwipePager 会把所有横向拖动当成切页，导致这排 chip 永远滚不动。
+            // 手指按下就禁止上层拦截，让 HorizontalScrollView 自己滚。
+            setOnTouchListener { v, e ->
+                if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                }
+                false
+            }
         }
         chips.orientation = HORIZONTAL
         chips.setPadding(0, dp(8f), 0, dp(2f))
@@ -267,6 +276,14 @@ class SearchPage(context: Context) : LinearLayout(context) {
             background = rounded(if (active) Theme.palette.brand else Theme.palette.panelSunken,
                     if (active) Theme.palette.brand else Theme.palette.line, Radius.SM, 1f)
             setOnClickListener { click() }
+            // 手指落在 chip 上时也要让上层 SwipePager 放行横向滚动，否则这排滚不动。
+            // 注意只能禁到页容器这一层，不能把 HorizontalScrollView 自己也禁掉。
+            setOnTouchListener { _, e ->
+                if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+                    this@SearchPage.parent?.requestDisallowInterceptTouchEvent(true)
+                }
+                false
+            }
         }
         val lp = LayoutParams(LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         lp.rightMargin = dp(6f)
