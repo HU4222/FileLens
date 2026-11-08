@@ -143,11 +143,30 @@ class CleanPage(context: Context) : LinearLayout(context) {
 
     private fun selectSegment(index: Int) {
         if (index == segment) return
+        val old = segment
         segment = index
         styleSegments()
-        dupSection.visibility = if (index == 0) View.VISIBLE else View.GONE
-        appSection.visibility = if (index == 1) View.VISIBLE else View.GONE
-        garbageSection.visibility = if (index == 2) View.VISIBLE else View.GONE
+        val sections = arrayOf(dupSection, appSection, garbageSection)
+        for (i in sections.indices) {
+            if (i != index) {
+                sections[i].animate().cancel()
+                sections[i].visibility = View.GONE
+            }
+        }
+        val incoming = sections[index]
+        incoming.animate().cancel()
+        incoming.visibility = View.VISIBLE
+        val start = if (index > old) 1f else -1f
+        val width = if (incoming.width > 0) incoming.width.toFloat()
+            else resources.displayMetrics.widthPixels.toFloat()
+        incoming.translationX = start * width * 0.18f
+        incoming.alpha = 0.4f
+        incoming.animate()
+                .translationX(0f).alpha(1f)
+                .setDuration(200L)
+                .setInterpolator(android.view.animation.PathInterpolator(
+                        0.22f, 0.9f, 0.3f, 1f))
+                .start()
         when (index) {
             1 -> onAppSelected()
             2 -> if (!garbageStarted) startGarbageScan()
@@ -301,9 +320,19 @@ class CleanPage(context: Context) : LinearLayout(context) {
             chip.gravity = Gravity.CENTER
             chip.setPadding(dp(12f), dp(5f), dp(12f), dp(5f))
             chip.setOnClickListener {
+                if (sortByCache == (i == 1)) return@setOnClickListener
                 sortByCache = i == 1
                 styleSort()
                 renderAppData()
+                appList.animate().cancel()
+                appList.translationY = dp(8f)
+                appList.alpha = 0.5f
+                appList.animate()
+                        .translationY(0f).alpha(1f)
+                        .setDuration(160L)
+                        .setInterpolator(android.view.animation.PathInterpolator(
+                                0.22f, 0.9f, 0.3f, 1f))
+                        .start()
             }
             val lp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
             lp.rightMargin = dp(6f)
