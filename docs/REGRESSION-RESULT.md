@@ -1,7 +1,7 @@
 
 ## 最终统计（截至 1.4.2 / 第 27 轮）
 
-- **PASS：约 59 / 64**
+- **PASS：约 60 / 64**
 - **FAIL 已修**：F1 单文件删除无撤销；F2 撤销条被底栏/键盘遮挡并点穿到 TabBar；F3 删除后搜索列表不刷新；F4 冷启动搜索假空；F5 清理页批量删除无撤销；F8 撤销后跳空间/树图；F9 撤销后清理页 0 组；F10 扫描中重扫静默取消；F12 路径搜索命中回收站文件。
 - **FAIL 未修 / 挂起**：F11 树图面包屑/返回在列表模式下点不动（已改命中优先级与热区，记 `FIXED-UNVERIFIED`）。
 - **BLOCKED**：无长期阻塞；清理页「按缓存」排序、传输 42、预览 51 等属本轮未跑，不是环境限制。
@@ -1074,3 +1074,13 @@ DTrash entries=20 bytes=56487096
 - 61 切 Tab 稳定性：**PASS**。lPage 连跳 space→search→clean→transfer→settings ×10 轮（50 次），进程存活（pid 3541），无 crash 记录；dumpsys meminfo TOTAL PSS **97,954KB → 92,809KB（-5,145KB）**。
 - 42 关服务不重启、51 预览、R6、R11、57、59、Tx：NOT RUN（本轮时间用尽）。
 - lDumpCounts 延迟已从 1.2s 改为 6s，待下轮复测 app/garbage 计数。
+
+
+---
+
+# 第二十八轮（1.4.2，基线 9e63cce）
+
+- **59 接收目录被删 → 回默认：PASS**。用共享 XML 注入 
+ecv_dir=/storage/emulated/0/DCIM/FLTest，删掉该目录后重启；重启后 
+un-as grep recv_dir **为空**，说明已清除并回退默认；App 未崩（空间页正常）。toast 被系统「Bluetooth keeps stopping」弹窗遮挡，未拍到，但 pref 清除是硬证据。
+- 42、51、R6、R11、57、Tx：**BLOCKED(本轮时间用尽，未执行)**。
