@@ -156,7 +156,8 @@ class TransferPage(context: Context) : FrameLayout(context) {
             gravity = Gravity.CENTER
             setTextColor(Theme.palette.text2)
             setPadding(dp(10f), dp(6f), dp(10f), dp(6f))
-            background = rounded(Theme.palette.panelSunken, Theme.palette.line, Radius.PILL)
+            background = rounded(Color.argb(15, 255, 255, 255),
+                    Theme.palette.line, Radius.PILL)
             setOnClickListener {
                 web.reload()
                 readCurrentView()
