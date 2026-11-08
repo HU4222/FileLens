@@ -75,6 +75,10 @@ class OverviewPage(context: Context) : FrameLayout(context) {
         gateLp.gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
         gateLp.bottomMargin = (96 * resources.displayMetrics.density).toInt()
         addView(scanGate, gateLp)
+        // 提示条尺寸变化（首次显示、字号/宽度变化）后重新让位，避免首次 post 量到 0。
+        scanGate.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            if (scanGate.visibility == View.VISIBLE) applyGatePad()
+        }
         refreshStorage()
     }
 
@@ -149,10 +153,22 @@ class OverviewPage(context: Context) : FrameLayout(context) {
 
     fun showScanPermissionGate() {
         scanGate.visibility = View.VISIBLE
+        scanGate.post { applyGatePad() }
     }
 
     fun hideScanPermissionGate() {
         scanGate.visibility = View.GONE
+        // 必须归零：反复开关不能把 padding 累积上去。
+        scroll.setPadding(0, 0, 0, 0)
+    }
+
+    /** 提示条浮在底部（bottomMargin 96dp），给它让出位置，别压住「空间分布」最后一行。 */
+    private fun applyGatePad() {
+        val d = resources.displayMetrics.density
+        val base = (96 * d).toInt() + (12 * d).toInt()
+        val gateH = scanGate.height
+        // 首次 post 时可能还没测量完（height=0），退化成只加 96+12；布局完成后再校正一次。
+        scroll.setPadding(0, 0, 0, if (gateH > 0) base + gateH else base)
     }
 
     fun onShown() {
