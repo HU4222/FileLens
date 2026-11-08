@@ -305,3 +305,55 @@ NOT RUN。
 | NOT RUN | R3、R4、空间 12–19 |
 
 新发现：F8 候选（清理页列表与磁盘不一致），待复现。
+
+
+---
+
+# 第七轮（1.4.2，基线 e7ae88e）
+
+## 先查多窗口混节点（5 分钟）
+
+- dumpsys window 当前只有 MainActivity 一个应用窗口（设置页不是 Dialog，是 Activity 内页面）；
+- 设置页 dump 里没有出现两份「设置」——**不是多窗口混节点**。
+- 但空间/底栏是自绘 Canvas，dump 无文本；搜索/清理/设置有原生控件，仍按指纹判页。
+
+## 删除失败的真因：MANAGE_EXTERNAL_STORAGE 被重置（环境，不是 App bug）
+
+- 删除 ui.xml、huge.jpg 都弹「移动失败，文件未删除」，文件保留；
+- logcat：MediaProvider: Calling package doesn't have write permission to rename file.
+- ppops get MANAGE_EXTERNAL_STORAGE = **default**（重装/权限重置后没恢复）；
+- ppops set ... allow 后同一操作成功删除。
+- 结论：**测试环境权限问题**，不是 App 缺陷；但说明每次安装后必须重新授权，否则所有删除测试都会误判。
+
+## F7 验收：部分通过，但**撤销后跳页**（新缺陷 F8）
+
+- 搜索页 huge.jpg：删除成功，撤销条出现（.tmp/emu/r7-bar2.png），但截图耗时超过 5 秒，点撤销时条已消失，未恢复。
+- 搜索页 ui.xml：删除 → 立即点撤销条（y≈1988）→ 文件回来了，md5sum /sdcard/ui.xml = 120d4260c8e34af5d44b78a05870bd9a，7113 字节。
+- **但撤销后 ssert-page 搜索 失败，当前页变成「空间」**：undoDelete() 成功后调了 startScan()，而 startScan() 会 selectTab(0) + showTreeOverlay()。
+- 因此 F7 的「点撤销不能跳 Tab」**不通过**，记 **F8：撤销后强制全盘重扫并跳回空间/树图**。
+- 修复建议：撤销后不要 startScan()，改为把恢复的文件重新插回 NodeStore（或只刷新当前页），保持当前 Tab。
+
+## 删除确认框：能出现，之前是工具/权限问题
+
+- 权限修复后，搜索页长按 → 删除 → 确认框出现；长按 800ms 移入回收站 长按后文件成功移入回收站。
+- 结论：**确认框没有 App bug**；上一轮「找不到节点」是点击没落在菜单项 + 权限失败叠加。
+
+## 清理页批量删除
+
+- 仍未能完成：按钮点击后在截图里看不到确认框，ls 前后一致（未删除）。
+- 记 BLOCKED(清理页按钮点击不可靠，截图未见确认框)，未继续卡住。
+
+## R3 / R4 / 空间页 #15 #19
+
+NOT RUN。
+
+## 本轮统计
+
+| 结果 | 数量 |
+|---|---|
+| PASS | 0 |
+| FAIL | 1（F7：撤销能恢复但跳页 → F8） |
+| BLOCKED | 1（清理页批量删除） |
+| NOT RUN | R3、R4、空间 #15/#19 |
+
+新缺陷：**F8 撤销后 startScan 跳回空间/树图**。
