@@ -96,6 +96,7 @@ class TransferPage(context: Context) : FrameLayout(context) {
     private var startFailed = false
     var onPanelVisibility: ((Boolean) -> Unit)? = null
     var onSheetVisibility: ((Boolean) -> Unit)? = null
+    var onPickRecvDir: (() -> Unit)? = null
     private var sheetOpen = false
     private var loadedUrl = ""
     private var panelShown = false
@@ -292,6 +293,11 @@ class TransferPage(context: Context) : FrameLayout(context) {
                 @JavascriptInterface
                 fun scanQr() {
                     handler.post { this@TransferPage.scanQr() }
+                }
+
+                @JavascriptInterface
+                fun pickRecvDir() {
+                    handler.post { onPickRecvDir?.invoke() }
                 }
 
                 @JavascriptInterface
@@ -670,6 +676,21 @@ class TransferPage(context: Context) : FrameLayout(context) {
         handler.postDelayed({ readCurrentView() }, 200L)
     }
 
+    /** 接收目录改完后，直接把网页「我的」那两处路径改成新值，不依赖用户切页刷新。 */
+    fun refreshRecvDir(path: String) {
+        val quoted = org.json.JSONObject.quote(path)
+        val js = "(function(){var p=$quoted;" +
+                "var kvs=[...document.querySelectorAll('#aboutBody .kv')];" +
+                "for(var i=0;i<kvs.length;i++){if(kvs[i].textContent.indexOf('接收目录')>=0){" +
+                "var b=kvs[i].querySelector('b');if(b)b.textContent=p;}}" +
+                "var cards=[...document.querySelectorAll('#aboutBody .card')];" +
+                "for(var j=0;j<cards.length;j++){if(cards[j].textContent.indexOf('接收目录')>=0){" +
+                "var m=cards[j].querySelector('p.mono');if(m)m.textContent=p;" +
+                "var inp=cards[j].querySelector('input');if(inp)inp.value=p;}}" +
+                "})()"
+        web.evaluateJavascript(js, null)
+    }
+
     private fun injectEmbedCss(view: WebView?) {
         val js = """
             (function(){
@@ -745,6 +766,15 @@ class TransferPage(context: Context) : FrameLayout(context) {
               new MutationObserver(fix).observe(cb,
                 {childList:true,subtree:true,characterData:true});
               fix();
+            })();
+            (function(){
+              if(window.__flRecvHooked)return; window.__flRecvHooked=true;
+              document.addEventListener('click',function(ev){
+                var kv=ev.target.closest&&ev.target.closest('.kv');
+                if(!kv||kv.textContent.indexOf('接收目录')<0)return;
+                ev.preventDefault();ev.stopPropagation();
+                try{window.__dlNative.pickRecvDir()}catch(e){}
+              },true);
             })();
         """.trimIndent()
         view?.evaluateJavascript(js, null)

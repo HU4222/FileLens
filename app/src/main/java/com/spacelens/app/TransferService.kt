@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.spacelens.app.core.RecvDir
 import java.io.File
 import java.net.ServerSocket
 
@@ -89,13 +90,7 @@ class TransferService : Service() {
         else getExternalFilesDir(null) ?: filesDir
     }
 
-    private fun recvRoot(): File {
-        val dir = File(Environment.getExternalStorageDirectory(), "Download/FileLens")
-        if (dir.exists() || dir.mkdirs()) return dir
-        val fallback = File(getExternalFilesDir(null) ?: filesDir, "FileLens")
-        fallback.mkdirs()
-        return fallback
-    }
+    private fun recvRoot(): File = RecvDir.resolve(this)
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 

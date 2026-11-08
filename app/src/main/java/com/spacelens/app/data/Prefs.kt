@@ -30,6 +30,11 @@ class Prefs(context: Context) {
         get() = sp.getString("saf_uri", null)
         set(value) = sp.edit().putString("saf_uri", value).apply()
 
+    /** 传输接收目录（绝对路径）；null 表示用默认 Download/FileLens。 */
+    var recvDir: String?
+        get() = sp.getString("recv_dir", null)
+        set(value) = sp.edit().putString("recv_dir", value).apply()
+
     var lastSummary: ScanSummary?
         get() {
             val at = sp.getLong("scan_finished_at", 0L)

@@ -35,7 +35,9 @@ import com.spacelens.app.core.Export
 import com.spacelens.app.core.Fmt
 import com.spacelens.app.core.SystemTrash
 import com.spacelens.app.core.Health
+import com.spacelens.app.core.FileOps
 import com.spacelens.app.core.NodeStore
+import com.spacelens.app.core.RecvDir
 import com.spacelens.app.core.Scanner
 import com.spacelens.app.core.SelectionState
 import com.spacelens.app.core.SnapshotStore
@@ -49,6 +51,7 @@ import com.spacelens.app.ui.CleanPage
 import com.spacelens.app.ui.CrashLogPage
 import com.spacelens.app.ui.DetailPane
 import com.spacelens.app.ui.Dialogs
+import com.spacelens.app.ui.DirPicker
 import com.spacelens.app.ui.FpsHudView
 import com.spacelens.app.ui.FrameStats
 import com.spacelens.app.ui.Motion
@@ -87,6 +90,7 @@ class MainActivity : Activity() {
     private var lastTrashBatch: String? = null
     @Volatile private var deleteCancelled = false
     private val undoHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var pendingUndo: (() -> Unit)? = null
     private lateinit var topBar: TopBar
     private lateinit var pager: SwipePager
     private lateinit var tabBar: TabBar
@@ -192,6 +196,7 @@ class MainActivity : Activity() {
         }
         transferPage = TransferPage(this)
         transferPage.onPanelVisibility = { open -> tabBar.isEnabled = !open }
+        transferPage.onPickRecvDir = { pickRecvDir() }
         transferPage.onSheetVisibility = { open ->
             tabBar.isEnabled = !open
             if (open) {
@@ -241,7 +246,17 @@ class MainActivity : Activity() {
                 setStroke((1 * resources.displayMetrics.density).toInt().coerceAtLeast(1), Theme.palette.brand)
             }
             visibility = View.GONE
-            setOnClickListener { undoDelete() }
+            setOnClickListener {
+                val action = pendingUndo
+                if (action != null) {
+                    pendingUndo = null
+                    undoHandler.removeCallbacksAndMessages(null)
+                    undoBar.visibility = View.GONE
+                    action.invoke()
+                } else {
+                    undoDelete()
+                }
+            }
         }
         val undoLp = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT)
@@ -338,6 +353,7 @@ class MainActivity : Activity() {
         treePage.onUnavailableView = { name -> toast(name + "将在后续阶段接入") }
         treePage.onRootChanged = { _ -> detailNode = -1; updateDetail() }
         treePage.onFileTap = { node -> showNodeDetail(node) }
+        treePage.onItemMenu = { node -> showItemMenu(node, true) }
         treePage.onSelectionToggle = { node -> toggleSelection(node) }
         treePage.onCancelSelection = { cancelSelection() }
         treePage.onDeleteSelection = { showDeletePreview() }
@@ -359,6 +375,7 @@ class MainActivity : Activity() {
         searchPage.rootPath = rootPath()
         searchPage.onOpenLocation = { node -> showTreeAt(node) }
         searchPage.onDeleteRequested = { node -> deleteSingle(node) }
+        searchPage.onItemMenu = { node -> showItemMenu(node, false) }
         cleanPage.store = store
         cleanPage.rootPath = rootPath()
         benchPage.onStart = { seconds -> startBench(seconds) }
@@ -465,14 +482,207 @@ class MainActivity : Activity() {
     }
 
 
+    private var previewDialog: android.app.Dialog? = null
+
     private fun showPreview(paths: List<String>, start: Int) {
         if (paths.isEmpty()) return
         val dialog = android.app.Dialog(this,
                 android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         val page = PreviewPage(this, paths, start)
         page.onClose = { dialog.dismiss() }
+        page.onRenamed = { oldPath, newPath ->
+            val idx = store.indexOfPath(rootPath(), oldPath)
+            val newName = File(newPath).name
+            if (idx > 0) store.renameNode(idx, newName)
+            refreshAfterFileOp()
+            val oldName = File(oldPath).name
+            val parent = File(oldPath).parentFile
+            showActionUndo("已重命名为 $newName · 撤销") {
+                val moved = File(newPath)
+                if (moved.renameTo(File(parent, oldName))) {
+                    if (idx > 0) store.renameNode(idx, oldName)
+                    refreshAfterFileOp()
+                    previewDialog?.dismiss()
+                    toast("已撤销改名")
+                } else {
+                    toast("撤销失败：$oldName 可能已被占用")
+                }
+            }
+        }
+        dialog.setOnDismissListener { previewDialog = null }
         dialog.setContentView(page)
+        previewDialog = dialog
         dialog.show()
+    }
+
+    // ---------------------------------------------------------------- 1.4.1 原生文件操作
+
+    private fun showItemMenu(node: Int, allowSelect: Boolean) {
+        if (node !in 0 until store.count) {
+            toast("节点不存在，先重新扫描")
+            return
+        }
+        if (scanner != null) {
+            toast("正在扫描，稍后再操作")
+            return
+        }
+        val isDir = store.flagsOf(node) and NodeStore.DIR != 0
+        val file = File(store.absolutePathOf(rootPath(), node))
+        val actions = ArrayList<Dialogs.Action>()
+        actions.add(Dialogs.Action("重命名") { showRenameDialog(file, node) })
+        actions.add(Dialogs.Action("移动到…") { showMovePicker(file, node) })
+        if (isDir && allowSelect && treePage.rootIndex != 0) {
+            // 新建文件夹创建在「当前正在看的目录」，成功后当前列表能看到；根层不给。
+            val currentDir = File(store.absolutePathOf(rootPath(), treePage.rootIndex))
+            actions.add(Dialogs.Action("新建文件夹") {
+                showNewFolderDialog(currentDir, treePage.rootIndex)
+            })
+        } else if (!isDir) {
+            actions.add(Dialogs.Action("删除（进回收站）", danger = true) { deleteSingle(node) })
+        }
+        if (allowSelect) {
+            actions.add(Dialogs.Action("多选") { treePage.selectFromMenu(node) })
+        }
+        Dialogs.showActions(this, store.nameOf(node), actions)
+    }
+
+    private fun showRenameDialog(file: File, node: Int, onDone: (() -> Unit)? = null) {
+        Dialogs.showInput(this, "重命名", "新名字", file.name, "重命名") { raw ->
+            when (val check = FileOps.checkName(raw, file.name)) {
+                FileOps.NameResult.Same -> return@showInput
+                is FileOps.NameResult.Bad -> {
+                    toast(check.message)
+                    return@showInput
+                }
+                FileOps.NameResult.Ok -> {
+                    val newName = raw.trim()
+                    val dup = FileOps.checkTarget(file.parentFile, newName)
+                    if (dup != null) {
+                        toast(dup)
+                        return@showInput
+                    }
+                    val result = FileOps.rename(file, newName)
+                    if (!result.ok) {
+                        toast(result.message)
+                        return@showInput
+                    }
+                    val idx = if (node > 0) node else store.indexOfPath(rootPath(), file.absolutePath)
+                    if (idx > 0) store.renameNode(idx, newName)
+                    refreshAfterFileOp()
+                    toast(result.message)
+                    onDone?.invoke()
+                    val oldName = file.name
+                    showActionUndo("已重命名为 $newName · 撤销") {
+                        val renamed = File(file.parentFile, newName)
+                        if (renamed.renameTo(file)) {
+                            if (idx > 0) store.renameNode(idx, oldName)
+                            refreshAfterFileOp()
+                            toast("已撤销改名")
+                        } else {
+                            toast("撤销失败：$oldName 可能已被占用")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showMovePicker(file: File, node: Int) {
+        val snap: NodeStore? = store
+        DirPicker.show(this, snap, rootPath(), file.parentFile, false, onPick = pick@{ target ->
+            if (FileOps.sameDir(file, target)) return@pick
+            val result = FileOps.move(file, target)
+            if (!result.ok) {
+                toast(result.message)
+                return@pick
+            }
+            val idx = if (node > 0) node else store.indexOfPath(rootPath(), file.absolutePath)
+            val targetIdx = store.indexOfPath(rootPath(), target.absolutePath)
+            if (idx > 0 && targetIdx >= 0) store.moveNode(idx, targetIdx)
+            refreshAfterFileOp()
+            toast(result.message)
+            val moved = File(target, file.name)
+            val oldParent = file.parentFile
+            showActionUndo("已移动到 ${target.name} · 撤销") {
+                val back = FileOps.move(moved, oldParent)
+                if (!back.ok) {
+                    toast("撤销失败：${back.message}")
+                } else {
+                    if (idx > 0) {
+                        val backIdx = store.indexOfPath(rootPath(), oldParent.absolutePath)
+                        if (backIdx >= 0) store.moveNode(idx, backIdx)
+                    }
+                    refreshAfterFileOp()
+                    toast("已撤销移动")
+                }
+            }
+        })
+    }
+
+    private fun showNewFolderDialog(dir: File, node: Int) {
+        Dialogs.showInput(this, "新建文件夹", "文件夹名字", "", "新建") { raw ->
+            when (val check = FileOps.checkName(raw, null)) {
+                FileOps.NameResult.Same -> return@showInput
+                is FileOps.NameResult.Bad -> {
+                    toast(check.message)
+                    return@showInput
+                }
+                FileOps.NameResult.Ok -> {
+                    val name = raw.trim()
+                    val dup = FileOps.checkTarget(dir, name)
+                    if (dup != null) {
+                        toast(dup)
+                        return@showInput
+                    }
+                    val result = FileOps.newFolder(dir, name)
+                    if (!result.ok) {
+                        toast(result.message)
+                        return@showInput
+                    }
+                    store.addDir(node, name, System.currentTimeMillis())
+                    refreshAfterFileOp()
+                    toast(result.message)
+                }
+            }
+        }
+    }
+
+    /** P5：局部刷新。NodeStore 已就地打补丁，这里只让页面重读同一份数据。 */
+    private fun refreshAfterFileOp() {
+        if (::treePage.isInitialized) treePage.refreshTree()
+        if (::searchPage.isInitialized) searchPage.refreshNow()
+        updateOverview()
+        updateMine()
+        updateDetail()
+    }
+
+    private fun pickRecvDir() {
+        val snap: NodeStore? = store
+        val start = RecvDir.resolve(this)
+        DirPicker.show(this, snap, rootPath(), start, true,
+                onPick = { dir ->
+                    val error = RecvDir.probe(dir)
+                    if (error != null) {
+                        toast(error)
+                    } else {
+                        RecvDir.save(this, dir)
+                        toast("接收目录已改为 ${dir.absolutePath}")
+                        transferPage.refreshRecvDir(dir.absolutePath)
+                    }
+                },
+                onRestoreDefault = {
+                    RecvDir.clear(this)
+                    toast("已恢复默认接收目录 Download/FileLens")
+                    transferPage.refreshRecvDir(RecvDir.defaultDir().absolutePath)
+                })
+    }
+
+    private fun checkRecvDirFallback() {
+        if (!::prefs.isInitialized) return
+        if (RecvDir.needsFallback(this)) {
+            RecvDir.clear(this)
+            toast("原接收目录不可用，已切回 Download/FileLens")
+        }
     }
 
     private var trashDialog: android.app.Dialog? = null
@@ -860,6 +1070,7 @@ class MainActivity : Activity() {
                 showFallback()
             }
         }
+        checkRecvDirFallback()
         syncScanGate()
     }
 
@@ -1205,9 +1416,22 @@ class MainActivity : Activity() {
 
     private fun showUndoBar() {
         undoHandler.removeCallbacksAndMessages(null)
+        pendingUndo = null
         undoBar.text = "已移入回收站 · 撤销"
         undoBar.visibility = View.VISIBLE
         undoHandler.postDelayed({ undoBar.visibility = View.GONE }, 5000L)
+    }
+
+    /** 1.4.1：改名/移动的 5 秒撤销条，复用回收站那条。 */
+    private fun showActionUndo(text: String, action: () -> Unit) {
+        undoHandler.removeCallbacksAndMessages(null)
+        pendingUndo = action
+        undoBar.text = text
+        undoBar.visibility = View.VISIBLE
+        undoHandler.postDelayed({
+            undoBar.visibility = View.GONE
+            pendingUndo = null
+        }, 5000L)
     }
 
     private fun undoDelete() {
