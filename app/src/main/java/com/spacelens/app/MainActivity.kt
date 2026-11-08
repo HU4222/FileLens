@@ -261,7 +261,7 @@ class MainActivity : Activity() {
         val undoLp = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT)
         undoLp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-        undoLp.bottomMargin = (88 * resources.displayMetrics.density).toInt()
+        undoLp.bottomMargin = (120 * resources.displayMetrics.density).toInt()
         root.addView(undoBar, undoLp)
 
         // 空间树保留为「空间」页内的全屏二级页，不占第 5 个 Tab。
@@ -518,6 +518,7 @@ class MainActivity : Activity() {
     // ---------------------------------------------------------------- 1.4.1 原生文件操作
 
     private fun showItemMenu(node: Int, allowSelect: Boolean) {
+        hideImeForUndo()
         if (node !in 0 until store.count) {
             toast("节点不存在，先重新扫描")
             return
@@ -894,6 +895,7 @@ class MainActivity : Activity() {
     }
 
     private fun deleteSingle(node: Int) {
+        hideImeForUndo()
         if (node <= 0 || node >= store.count) return
         val d = DeletePolicy.decide(this, store, node, rootPath())
         if (!d.selectable) {
@@ -905,17 +907,19 @@ class MainActivity : Activity() {
         if (rel.isEmpty()) return
         Dialogs.showDeleteConfirm(this, "删除文件",
                 "将把「${store.nameOf(node)}」移入回收站，可恢复。") {
+            val batch = Trash.batchId()
             Thread({
-                val result = Trash.move(this, listOf(File(abs) to rel))
+                val result = Trash.move(this, listOf(File(abs) to rel), batch)
                 runOnUiThread {
                     if (result.moved > 0) {
+                        lastTrashBatch = batch
                         store.markDeleted(intArrayOf(node))
                         treePage.refreshTree()
-                        searchPage.refresh()
+                        searchPage.refreshNow()
                         cleanPage.reset()
                         updateOverview()
                         updateDetail()
-                        toast("已移入回收站")
+                        showUndoBar()
                     } else {
                         toast("移动失败，文件未删除")
                     }
@@ -1403,11 +1407,11 @@ class MainActivity : Activity() {
                 if (gone.isNotEmpty()) {
                     store.markDeleted(gone)
                     treePage.refreshTree()
+                    searchPage.refreshNow()
                     updateOverview()
                 }
                 cancelSelection()
-                toast(result.message)
-                if (result.moved > 0) showUndoBar()
+                if (result.moved > 0) showUndoBar() else toast(result.message)
                 updateMine()
                 updateDetail()
             }
@@ -1415,8 +1419,10 @@ class MainActivity : Activity() {
     }
 
     private fun showUndoBar() {
+        hideImeForUndo()
         undoHandler.removeCallbacksAndMessages(null)
         pendingUndo = null
+        undoBar.bringToFront()
         undoBar.text = "已移入回收站 · 撤销"
         undoBar.visibility = View.VISIBLE
         undoHandler.postDelayed({ undoBar.visibility = View.GONE }, 5000L)
@@ -1424,6 +1430,8 @@ class MainActivity : Activity() {
 
     /** 1.4.1：改名/移动的 5 秒撤销条，复用回收站那条。 */
     private fun showActionUndo(text: String, action: () -> Unit) {
+        hideImeForUndo()
+        undoBar.bringToFront()
         undoHandler.removeCallbacksAndMessages(null)
         pendingUndo = action
         undoBar.text = text
@@ -1432,6 +1440,18 @@ class MainActivity : Activity() {
             undoBar.visibility = View.GONE
             pendingUndo = null
         }, 5000L)
+    }
+
+    /** 撤销条画在 Activity 底部，键盘弹着时会被盖住；弹条前先收键盘。 */
+    private fun hideImeForUndo() {
+        try {
+            val imm = getSystemService(INPUT_METHOD_SERVICE)
+                    as? android.view.inputmethod.InputMethodManager ?: return
+            val token = (currentFocus ?: root).windowToken
+            imm.hideSoftInputFromWindow(token, 0)
+        } catch (t: Throwable) {
+            android.util.Log.e("FileLens", "hide ime failed", t)
+        }
     }
 
     private fun undoDelete() {
