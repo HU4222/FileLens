@@ -1,7 +1,7 @@
 # FileLens 交接文件（新会话先读这个）
 
 > 读这一份 ≈ 3 千 token；翻聊天记录 ≈ 38 万。
-> 最后更新：2026-11-08 11:00
+> 最后更新：2026-11-08 11:50
 
 ---
 
@@ -16,6 +16,7 @@ Android 文件管理 App，包名 `com.hu4222.filelens`。
 主线代码   E:\deepseek工作区\filelens            （main 分支，当前在 demo/blur）
 构建工作树 E:\deepseek工作区\filelens-main       （main 检出，用它构建主线）
 构建命令   cd filelens-main && cmd /c build_android.bat
+git        C:\Users\ZhuanZ（无密码）\AppData\Local\Programs\WorkBuddy\resources\vendor\PortableGit\mingw64\bin\git.exe（不在 PATH）
 JDK        C:\Program Files\Java\jdk-17
 签名       ANDROID_USER_HOME=.android-home（证书指纹 FA1B29…）★不许换
 产物       filelens-main\FileLens-<版本>.apk
@@ -27,17 +28,31 @@ JDK        C:\Program Files\Java\jdk-17
 ## 三、当前版本与状态
 
 ```
-当前版本   1.3.7 / versionCode 19（真机验收：P1-1 齿轮 ✅ / P1-5 Shizuku 隐藏 ✅
-                                   P1-2、P1-3、P1-4 代码核对通过，动画观感未验）
-已验证版本 1.3.6 / versionCode 18（真机验过：渐变淡出 ✅ 回收站进入 ✅ 底栏五项 ✅）
-最近提交   660026f chore(release): bump to 1.3.7
-           54b0ff7 fix(clean): hide shizuku block unless binder is detected
-           059f916 feat(clean): animate segment and sort changes
-           67bd3f5 feat(ui): expand tree and bench overlays from tapped card
-           633e064 fix(ui): draw outlined gear icon for settings tab
+当前版本   1.3.8 / versionCode 20（自测：build 通过、冷启动不崩、传输页/浏览页能打开；
+                                   三项功能待真机验收）
+已验证版本 1.3.7 / versionCode 19（真机验过：齿轮 ✅ Shizuku 隐藏 ✅ 树图下钻 ✅
+                                   六位配对码 ✅ 局域网地址 ✅ 扫码拉起相机 ✅ 本机浏览无下载按钮 ✅）
+最近提交   1bd59aa chore(release): bump to 1.3.8
+           f5f6e3f feat(transfer): dim page while floating balls expand
+           10cd756 feat(transfer): label root breadcrumb as internal storage
+           9805e29 fix(transfer): unify refresh and qr button fill
 ```
 
-### 1.3.7 五项落点（新会话按这里查）
+### 1.3.8 三处落点（新会话按这里查）
+
+| # | 改动 | 位置 |
+|---|---|---|
+| P1-2 按钮底色 | `refresh` 背景改 `Color.argb(15,255,255,255)`，与 `qrButton` 同款 | `ui/TransferPage.kt` `refresh` 初始化 |
+| P1-3 面包屑根名 | `#crumbs` 首段 `/` 注入显示「内部存储」，`data-crumb=0` 不变 | `ui/TransferPage.kt` `injectViewBridge()` 末尾 IIFE |
+| P2-1 展开遮罩 | `scrim` 35% 黑，展开 150ms 淡入、收起淡出后 GONE | `ui/TransferPage.kt` `buildBalls()` / `expandBalls()` / `collapseBalls()` |
+
+P1-1（底部被胶囊遮挡）真机实测不成立：`.views` 已有 134px 内边距 + WebView 92dp，滚到
+`scrollTop + innerHeight >= scrollHeight - 2` 时最后一行在胶囊上方，未改。
+
+1.3.8 自测：build 通过；冷启动无 FATAL；传输页能打开；页面内实测面包屑首段=「内部存储」、
+悬浮球展开时内容亮度下降 35%（截图在 `.tmp/v138-*.png`）。功能验收未做。
+
+### 1.3.7 五项落点（历史，新会话按这里查）
 
 | # | 改在哪个文件 / 函数 |
 |---|---|
@@ -60,8 +75,8 @@ JDK        C:\Program Files\Java\jdk-17
 
 ## 四、下一步
 
-1.3.7 五项已实现，等待用户真机验收；本开发会话到此停止，不接新任务。
-新会话先按「三、1.3.7 五项落点」核对代码，再按用户新任务书继续。
+1.3.8 三项已实现，等待用户真机验收；本开发会话到此停止，不接新任务。
+新会话先按「三、1.3.8 三处落点」核对代码，再按用户新任务书继续。
 
 ### 更后面的（没排期，等用户定）
 - 照片清理（方案在 `docs/PHOTO-CLEAN-PLAN.md`，P1 一周）
