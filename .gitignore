@@ -2,6 +2,7 @@
 .gradle-home/
 .android-home/
 .tmp/
+__pycache__/
 *.log
 build/
 app/build/
