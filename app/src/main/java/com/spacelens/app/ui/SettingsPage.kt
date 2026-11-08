@@ -1,7 +1,9 @@
 package com.spacelens.app.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -28,6 +30,7 @@ class SettingsPage(context: Context) : LinearLayout(context) {
 
     var onClose: (() -> Unit)? = null
     var onTrash: (() -> Unit)? = null
+    var onRequestCamera: (() -> Unit)? = null
     private val handler = Handler(Looper.getMainLooper())
     private val rows = ArrayList<Row>()
     private val trashLine = TextView(context)
@@ -211,9 +214,30 @@ class SettingsPage(context: Context) : LinearLayout(context) {
     }
 
     private fun requestCamera() {
-        val activity = context as? android.app.Activity ?: return
-        activity.requestPermissions(arrayOf(Manifest.permission.CAMERA), 9101)
-        postDelayed({ refresh() }, 500L)
+        onRequestCamera?.invoke()
+        if (onRequestCamera == null) {
+            val activity = findActivity()
+            if (activity == null) {
+                openAppDetails()
+            } else {
+                activity.requestPermissions(arrayOf(Manifest.permission.CAMERA), 9101)
+                postDelayed({ refresh() }, 500L)
+            }
+        }
+    }
+
+    private fun findActivity(): Activity? {
+        var c: Context = context
+        while (c is ContextWrapper) {
+            if (c is Activity) return c
+            c = c.baseContext
+        }
+        return null
+    }
+
+    fun openAppDetails() {
+        launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:" + context.packageName)))
     }
 
     private fun section(text: String): TextView = TextView(context).apply {

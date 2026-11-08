@@ -51,7 +51,7 @@ class BenchPage(context: Context) : FrameLayout(context) {
         }
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18f), dp(12f), dp(18f), dp(16f))
+            setPadding(dp(18f), dp(12f), dp(18f), dp(92f))
         }
         scroll.addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))

@@ -37,8 +37,6 @@ class CleanPage(context: Context) : LinearLayout(context) {
 
     var store: NodeStore? = null
     var rootPath: String = ""
-    var onTrashClick: (() -> Unit)? = null
-    private val trashEntry = TextView(context)
 
     private val segmentBar = LinearLayout(context)
     private val dupChip = TextView(context)
@@ -107,32 +105,10 @@ class CleanPage(context: Context) : LinearLayout(context) {
         setPadding(dp(18f), dp(6f), dp(18f), dp(8f))
         setBackgroundColor(Color.TRANSPARENT)
         buildSegments()
-        buildTrashEntry()
         buildDuplicateSection()
         buildAppSection()
         buildGarbageSection()
         selectSegment(0)
-        updateTrashEntry()
-    }
-
-    private fun buildTrashEntry() {
-        trashEntry.apply {
-            textSize = 12f
-            setTextColor(Theme.palette.text2)
-            setPadding(dp(12f), dp(10f), dp(12f), dp(10f))
-            background = rounded(Theme.palette.panelSunken, Theme.palette.line, 12f)
-            setOnClickListener { onTrashClick?.invoke() }
-        }
-        val lp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-        lp.bottomMargin = dp(8f)
-        addView(trashEntry, 0, lp)
-    }
-
-    fun updateTrashEntry() {
-        val items = com.spacelens.app.core.Trash.entries(context)
-        val bytes = items.sumOf { it.size }
-        trashEntry.text = "回收站 · ${items.size} 项 · " +
-                android.text.format.Formatter.formatFileSize(context, bytes) + "    >"
     }
 
     private fun buildSegments() {
@@ -680,7 +656,6 @@ class CleanPage(context: Context) : LinearLayout(context) {
     }
 
     fun onShown() {
-        updateTrashEntry()
         if (segment == 1) {
             onAppSelected()
             return

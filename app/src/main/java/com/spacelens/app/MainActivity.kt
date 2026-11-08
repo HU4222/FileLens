@@ -26,6 +26,7 @@ import android.widget.Toast
 import com.spacelens.app.core.CacheCleaner
 import com.spacelens.app.core.Classifier
 import com.spacelens.app.core.DeletePolicy
+import androidx.core.app.ActivityCompat
 import androidx.core.content.FileProvider
 import android.provider.DocumentsContract
 import android.webkit.MimeTypeMap
@@ -177,10 +178,13 @@ class MainActivity : Activity() {
         minePage = MinePage(this)
         searchPage = SearchPage(this)
         cleanPage = CleanPage(this)
-        cleanPage.onTrashClick = { showTrashPage() }
         settingsPage = SettingsPage(this)
         settingsPage.onTrash = { showTrashPage() }
         settingsPage.onClose = { selectTab(if (previousTab in 0..3) previousTab else 0, true) }
+        settingsPage.onRequestCamera = {
+            ActivityCompat.requestPermissions(this,
+                    arrayOf(Manifest.permission.CAMERA), REQ_CAMERA)
+        }
         transferPage = TransferPage(this)
         transferPage.onPanelVisibility = { open -> tabBar.isEnabled = !open }
         transferPage.onSheetVisibility = { open ->
@@ -469,7 +473,6 @@ class MainActivity : Activity() {
         val page = TrashPage(this)
         page.onClose = { dialog.dismiss() }
         dialog.setContentView(page)
-        dialog.setOnDismissListener { cleanPage.updateTrashEntry() }
         dialog.show()
     }
 
@@ -486,6 +489,7 @@ class MainActivity : Activity() {
 
     private fun showTreeOverlay() {
         if (!::treeOverlay.isInitialized) return
+        tabBar.visibility = View.GONE
         treePage.setWindowClass()
         treeOverlay.visibility = View.VISIBLE
         treeOverlay.bringToFront()
@@ -494,6 +498,9 @@ class MainActivity : Activity() {
 
     private fun hideTreeOverlay() {
         if (::treeOverlay.isInitialized) treeOverlay.visibility = View.GONE
+        if (::tabBar.isInitialized && shell.windowClass == WindowClass.COMPACT) {
+            tabBar.visibility = View.VISIBLE
+        }
     }
 
     private fun isBenchVisible(): Boolean =
@@ -501,6 +508,7 @@ class MainActivity : Activity() {
 
     private fun showBenchOverlay() {
         if (!::benchOverlay.isInitialized) return
+        tabBar.visibility = View.GONE
         benchOverlay.visibility = View.VISIBLE
         benchOverlay.bringToFront()
         benchOverlay.requestLayout()
@@ -510,6 +518,9 @@ class MainActivity : Activity() {
 
     private fun hideBenchOverlay() {
         if (::benchOverlay.isInitialized) benchOverlay.visibility = View.GONE
+        if (::tabBar.isInitialized && shell.windowClass == WindowClass.COMPACT) {
+            tabBar.visibility = View.VISIBLE
+        }
     }
 
     private fun showTreeAt(node: Int) {
@@ -629,6 +640,15 @@ class MainActivity : Activity() {
         }
         if (requestCode == CacheCleaner.REQUEST_CODE) {
             if (::cleanPage.isInitialized) cleanPage.onShizukuPermissionResult()
+        }
+        if (requestCode == REQ_CAMERA) {
+            if (::settingsPage.isInitialized) {
+                val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+                settingsPage.refresh()
+                if (!granted && !shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
+                    settingsPage.openAppDetails()
+                }
+            }
         }
     }
 
@@ -1537,5 +1557,6 @@ class MainActivity : Activity() {
         private const val REQ_READ = 1001
         private const val REQ_SAF = 1002
         private const val REQ_ALL_FILES = 1003
+        private const val REQ_CAMERA = 1004
     }
 }
