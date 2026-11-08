@@ -1,6 +1,11 @@
 package com.spacelens.app.ui
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
@@ -81,6 +86,19 @@ class SwipePager(context: Context) : ViewGroup(context) {
                     MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY),
             )
         }
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        // 页面内容全部画完后，再盖一层底部淡出；不依赖兄弟 View 的 z 序。
+        val fadeH = 82f * resources.displayMetrics.density
+        val bg = Theme.palette.bg
+        val paint = Paint().apply {
+            shader = LinearGradient(0f, height - fadeH, 0f, height.toFloat(),
+                    intArrayOf(Color.TRANSPARENT, Theme.alpha(bg, 217), bg),
+                    floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+        }
+        canvas.drawRect(0f, height - fadeH, width.toFloat(), height.toFloat(), paint)
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {

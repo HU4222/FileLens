@@ -33,8 +33,8 @@ class SettingsPage(context: Context) : LinearLayout(context) {
     var onRequestCamera: (() -> Unit)? = null
     private val handler = Handler(Looper.getMainLooper())
     private val rows = ArrayList<Row>()
+    private val trashRow = LinearLayout(context)
     private val trashLine = TextView(context)
-    private var refreshTask: Runnable? = null
 
     private data class Row(
             val action: TextView,
@@ -83,16 +83,20 @@ class SettingsPage(context: Context) : LinearLayout(context) {
                 { camera() }, { requestCamera() })
 
         body.addView(section("其他"), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        trashLine.apply {
-            textSize = 14f
-            setTextColor(Theme.palette.text2)
+        trashRow.apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = true
+            isFocusable = true
             setPadding(dp(12f), dp(12f), dp(12f), dp(12f))
             background = rounded(Theme.palette.panelSunken, Theme.palette.line, 12f)
             setOnClickListener {
+                android.util.Log.d("FileLensSettings", "trash row clicked")
                 val callback = onTrash
                 if (callback == null) {
                     android.util.Log.e("FileLensSettings", "trash callback is null")
-                    android.widget.Toast.makeText(context, "回收站打开失败", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, "回收站打开失败",
+                            android.widget.Toast.LENGTH_SHORT).show()
                 } else {
                     try {
                         callback.invoke()
@@ -104,7 +108,18 @@ class SettingsPage(context: Context) : LinearLayout(context) {
                 }
             }
         }
-        body.addView(trashLine, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        trashLine.apply {
+            textSize = 14f
+            setTextColor(Theme.palette.text2)
+        }
+        trashRow.addView(trashLine, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        trashRow.addView(TextView(context).apply {
+            text = "进入 ›"
+            textSize = 12f
+            setTextColor(Theme.palette.brand)
+            setPadding(dp(8f), 0, 0, 0)
+        }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        body.addView(trashRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         body.addView(TextView(context).apply {
             text = "FileLens ${BuildConfig.VERSION_NAME} · HU4222"
             textSize = 11f
@@ -164,25 +179,12 @@ class SettingsPage(context: Context) : LinearLayout(context) {
         val items = Trash.entries(context)
         val bytes = items.sumOf { it.size }
         trashLine.text = "回收站 · ${items.size} 项 · " +
-                android.text.format.Formatter.formatFileSize(context, bytes) + "           进入 ›"
+                android.text.format.Formatter.formatFileSize(context, bytes)
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        val task = object : Runnable {
-            override fun run() {
-                refresh()
-                handler.postDelayed(this, 1000L)
-            }
-        }
-        refreshTask = task
-        handler.post(task)
-    }
-
-    override fun onDetachedFromWindow() {
-        refreshTask?.let { handler.removeCallbacks(it) }
-        refreshTask = null
-        super.onDetachedFromWindow()
+        refresh()
     }
 
     private fun allFiles(): Boolean =

@@ -706,6 +706,7 @@ class MainActivity : Activity() {
         updateOverview()
         if (::cleanPage.isInitialized) cleanPage.onResume()
         if (::transferPage.isInitialized) transferPage.onResume()
+        if (::settingsPage.isInitialized) settingsPage.refresh()
         if (pendingScan) {
             if (hasAllFilesAccess() || hasReadAccess()) {
                 pendingScan = false
