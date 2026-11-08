@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.os.Environment
@@ -45,6 +46,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
     private var scanning = false
     private var scanAngle = 0f
     private var scanAnim: Motion.Animation? = null
+    private var lastQuickCard = -1
 
     init {
         scroll.isFillViewport = true
@@ -139,6 +141,12 @@ class OverviewPage(context: Context) : FrameLayout(context) {
         content.invalidate()
     }
 
+    /** 返回最后一次点击的快捷卡在屏幕上的矩形，供 overlay 扩张动画定位。 */
+    fun lastQuickCardRectOnScreen(): Rect? {
+        if (lastQuickCard !in 0..2) return null
+        return content.quickCardRectOnScreen(lastQuickCard)
+    }
+
     fun showScanPermissionGate() {
         scanGate.visibility = View.VISIBLE
     }
@@ -179,6 +187,16 @@ class OverviewPage(context: Context) : FrameLayout(context) {
         private val catRects = Array(8) { RectF() }
         private val quickRects = Array(3) { RectF() }
         private var pressed = -1
+
+        fun quickCardRectOnScreen(index: Int): Rect? {
+            if (index !in quickRects.indices) return null
+            val r = quickRects[index]
+            if (r.width() <= 0f || r.height() <= 0f) return null
+            val loc = IntArray(2)
+            getLocationOnScreen(loc)
+            return Rect(loc[0] + r.left.toInt(), loc[1] + r.top.toInt(),
+                    loc[0] + r.right.toInt(), loc[1] + r.bottom.toInt())
+        }
 
         private fun contentHeight(): Int {
             var y = 10f * d + heroH + 12f * d
@@ -494,6 +512,7 @@ class OverviewPage(context: Context) : FrameLayout(context) {
                     pressed = -1
                     invalidate()
                     if (h >= 0 && h == was) {
+                        lastQuickCard = if (h in 1..3) h - 1 else -1
                         when (h) {
                             0 -> onStartScan?.invoke()
                             1 -> onOpenTree?.invoke()

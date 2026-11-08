@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
@@ -98,6 +99,8 @@ class MainActivity : Activity() {
     private lateinit var settingsPage: SettingsPage
     private lateinit var treeOverlay: FrameLayout
     private lateinit var benchOverlay: FrameLayout
+    private var treeOrigin: Rect? = null
+    private var benchOrigin: Rect? = null
     private var benchRunning = false
 
     private var pendingScan = false
@@ -315,12 +318,12 @@ class MainActivity : Activity() {
         pager.onPageChanged = { onPageSettled(it) }
 
         overviewPage.onStartScan = { requestScan() }
-        overviewPage.onOpenTree = { showTreeOverlay() }
+        overviewPage.onOpenTree = { showTreeOverlay(overviewPage.lastQuickCardRectOnScreen()) }
         overviewPage.onHealth = {
             selectTab(2, animate = true)
             cleanPage.onShown()
         }
-        overviewPage.onBench = { showBenchOverlay() }
+        overviewPage.onBench = { showBenchOverlay(overviewPage.lastQuickCardRectOnScreen()) }
         overviewPage.onSettings = { selectTab(4, animate = true) }
         overviewPage.onCategory = { category ->
             searchPage.applyTypeFilter(category)
@@ -504,17 +507,64 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    private fun showTreeOverlay() {
+    private fun showTreeOverlay(origin: Rect? = null) {
         if (!::treeOverlay.isInitialized) return
         tabBar.visibility = View.GONE
         treePage.setWindowClass()
+        treeOverlay.animate().cancel()
         treeOverlay.visibility = View.VISIBLE
         treeOverlay.bringToFront()
+        treeOrigin = origin
+        if (origin == null) {
+            treeOverlay.alpha = 1f
+            treeOverlay.scaleX = 1f
+            treeOverlay.scaleY = 1f
+            updateDetail()
+            return
+        }
+        val loc = IntArray(2)
+        treeOverlay.getLocationOnScreen(loc)
+        treeOverlay.alpha = 0f
+        treeOverlay.scaleX = 0.2f
+        treeOverlay.scaleY = 0.2f
+        treeOverlay.pivotX = (origin.centerX() - loc[0]).toFloat()
+        treeOverlay.pivotY = (origin.centerY() - loc[1]).toFloat()
+        treeOverlay.post {
+            treeOverlay.animate()
+                    .alpha(1f).scaleX(1f).scaleY(1f)
+                    .setDuration(280L)
+                    .setInterpolator(android.view.animation.PathInterpolator(
+                            0.22f, 0.9f, 0.3f, 1f))
+                    .start()
+        }
         updateDetail()
     }
 
     private fun hideTreeOverlay() {
-        if (::treeOverlay.isInitialized) treeOverlay.visibility = View.GONE
+        if (!::treeOverlay.isInitialized) return
+        val origin = treeOrigin
+        treeOrigin = null
+        if (origin == null) {
+            treeOverlay.visibility = View.GONE
+            restoreTabBar()
+            return
+        }
+        treeOverlay.animate().cancel()
+        treeOverlay.animate()
+                .alpha(0f).scaleX(0.2f).scaleY(0.2f)
+                .setDuration(200L)
+                .setInterpolator(android.view.animation.PathInterpolator(
+                        0.22f, 0.9f, 0.3f, 1f))
+                .withEndAction {
+                    treeOverlay.visibility = View.GONE
+                    treeOverlay.alpha = 1f
+                    treeOverlay.scaleX = 1f
+                    treeOverlay.scaleY = 1f
+                    restoreTabBar()
+                }.start()
+    }
+
+    private fun restoreTabBar() {
         if (::tabBar.isInitialized && shell.windowClass == WindowClass.COMPACT) {
             tabBar.visibility = View.VISIBLE
         }
@@ -523,21 +573,61 @@ class MainActivity : Activity() {
     private fun isBenchVisible(): Boolean =
             ::benchOverlay.isInitialized && benchOverlay.visibility == View.VISIBLE
 
-    private fun showBenchOverlay() {
+    private fun showBenchOverlay(origin: Rect? = null) {
         if (!::benchOverlay.isInitialized) return
         tabBar.visibility = View.GONE
+        benchOverlay.animate().cancel()
         benchOverlay.visibility = View.VISIBLE
         benchOverlay.bringToFront()
         benchOverlay.requestLayout()
         benchPage.requestLayout()
         benchPage.invalidate()
+        benchOrigin = origin
+        if (origin == null) {
+            benchOverlay.alpha = 1f
+            benchOverlay.scaleX = 1f
+            benchOverlay.scaleY = 1f
+            return
+        }
+        val loc = IntArray(2)
+        benchOverlay.getLocationOnScreen(loc)
+        benchOverlay.alpha = 0f
+        benchOverlay.scaleX = 0.2f
+        benchOverlay.scaleY = 0.2f
+        benchOverlay.pivotX = (origin.centerX() - loc[0]).toFloat()
+        benchOverlay.pivotY = (origin.centerY() - loc[1]).toFloat()
+        benchOverlay.post {
+            benchOverlay.animate()
+                    .alpha(1f).scaleX(1f).scaleY(1f)
+                    .setDuration(280L)
+                    .setInterpolator(android.view.animation.PathInterpolator(
+                            0.22f, 0.9f, 0.3f, 1f))
+                    .start()
+        }
     }
 
     private fun hideBenchOverlay() {
-        if (::benchOverlay.isInitialized) benchOverlay.visibility = View.GONE
-        if (::tabBar.isInitialized && shell.windowClass == WindowClass.COMPACT) {
-            tabBar.visibility = View.VISIBLE
+        if (!::benchOverlay.isInitialized) return
+        val origin = benchOrigin
+        benchOrigin = null
+        if (origin == null) {
+            benchOverlay.visibility = View.GONE
+            restoreTabBar()
+            return
         }
+        benchOverlay.animate().cancel()
+        benchOverlay.animate()
+                .alpha(0f).scaleX(0.2f).scaleY(0.2f)
+                .setDuration(200L)
+                .setInterpolator(android.view.animation.PathInterpolator(
+                        0.22f, 0.9f, 0.3f, 1f))
+                .withEndAction {
+                    benchOverlay.visibility = View.GONE
+                    benchOverlay.alpha = 1f
+                    benchOverlay.scaleX = 1f
+                    benchOverlay.scaleY = 1f
+                    restoreTabBar()
+                }.start()
     }
 
     private fun showTreeAt(node: Int) {
