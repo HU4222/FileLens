@@ -206,3 +206,26 @@ unPendingUndo() 统一处理点击：先隐藏再执行改名/移动的 action �
 ## 备注
 
 - 这轮暴露的是**测试脚本对 Tab 状态/IME 的假设不可靠**（App 启动会保留上次 Tab，	ap 2192 不一定切到预期页）。下轮先 orce-stop + 冷启动，并用 dump 确认当前页标题后再操作。
+
+
+---
+
+# 第五轮（1.4.2，基线 12326f9）
+
+## A. tools/drive.py
+
+新增语义化导航工具，命令：restart / goto / assert-page / wait-text / tap-text / long-text / shot。
+
+实现要点：
+- 
+estart 先 orce-stop 再 m start -W，等 1.5s 首帧；
+- goto 用底栏固定 x + 页面指纹断言（空间/底栏是自绘 Canvas，dump 里没有文本，不能靠标题）：
+  搜索=有 EditText；清理=有「重复文件/应用占用/垃圾建议」；设置=有「回收站/崩溃日志」；传输=有「传输服务/WebView」；其余=空间；
+- 	ap-text/long-text 按 dump 的 bounds 算中心；wait-text 轮询 dump；
+- 失败打印当前页 + 屏幕尺寸 + 节点数。
+
+验收序列（restart → goto 搜索 → assert → goto 清理 → assert → goto 空间 → shot）**连跑 3 遍全部通过**，输出见本轮汇报。
+
+## B. F7 验证 / R3 / R4 / 空间页
+
+待本轮继续执行，结果追加在本节之后。
