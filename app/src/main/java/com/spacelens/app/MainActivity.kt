@@ -61,6 +61,7 @@ import com.spacelens.app.ui.Theme
 import com.spacelens.app.ui.ThemeMode
 import com.spacelens.app.ui.TopBar
 import com.spacelens.app.ui.PreviewPage
+import com.spacelens.app.ui.SettingsPage
 import com.spacelens.app.ui.TransferPage
 import com.spacelens.app.ui.TrashPage
 import com.spacelens.app.ui.TreePage
@@ -156,6 +157,7 @@ class MainActivity : Activity() {
 
     private fun buildUi() {
         root = FrameLayout(this)
+        root.setBackgroundColor(Theme.palette.bg)
         root.addView(BackdropView(this), FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -308,6 +310,7 @@ class MainActivity : Activity() {
             cleanPage.onShown()
         }
         overviewPage.onBench = { showBenchOverlay() }
+        overviewPage.onSettings = { showSettingsPage() }
         overviewPage.onCategory = { category ->
             searchPage.applyTypeFilter(category)
             selectTab(1, animate = true)
@@ -335,7 +338,7 @@ class MainActivity : Activity() {
         }
         searchPage.store = store
         searchPage.onPreview = { node ->
-            showPreview(listOf(store.pathOf(node)), 0)
+            showPreview(listOf(store.absolutePathOf(rootPath(), node)), 0)
         }
         searchPage.rootPath = rootPath()
         searchPage.onOpenLocation = { node -> showTreeAt(node) }
@@ -364,6 +367,7 @@ class MainActivity : Activity() {
         root.setOnApplyWindowInsetsListener { _, insets ->
             shell.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom)
             treeOverlay.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom)
+            benchOverlay.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom)
             insets
         }
         root.requestApplyInsets()
@@ -428,6 +432,17 @@ class MainActivity : Activity() {
 
     private fun isTreeVisible(): Boolean =
             ::treeOverlay.isInitialized && treeOverlay.visibility == View.VISIBLE
+
+    private fun showSettingsPage() {
+        val dialog = android.app.Dialog(this,
+                android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        val page = SettingsPage(this)
+        page.onClose = { dialog.dismiss() }
+        page.onTrash = { showTrashPage() }
+        dialog.setContentView(page)
+        dialog.show()
+    }
+
 
     private fun showPreview(paths: List<String>, start: Int) {
         if (paths.isEmpty()) return
@@ -548,12 +563,8 @@ class MainActivity : Activity() {
             startScan()
             return
         }
-        if (Build.VERSION.SDK_INT >= 30) {
-            openAllFilesSettings()
-        } else {
-            prefs.permissionAsked = true
-            requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), REQ_READ)
-        }
+        overviewPage.showScanPermissionGate()
+        toast("需要文件访问权限才能扫描，请到设置里授权")
     }
 
     private fun openAllFilesSettings() {
@@ -664,6 +675,7 @@ class MainActivity : Activity() {
 
     /** M2：单线程 DFS 扫描内部存储，边扫边更新树图。 */
     private fun startScan() {
+        overviewPage.hideScanPermissionGate()
         if (snapshotLoading || saveThread?.isAlive == true) {
             pendingStartAfterIo = true
             toast("正在载入上次快照，稍后开始扫描")
@@ -1419,6 +1431,7 @@ class MainActivity : Activity() {
 
     private fun applyWindowTheme() {
         val p = Theme.palette
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         if (Build.VERSION.SDK_INT >= 26) {
             window.navigationBarColor = Color.TRANSPARENT

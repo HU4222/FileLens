@@ -13,6 +13,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ScrollView
+import android.widget.TextView
 import com.spacelens.app.BuildConfig
 import com.spacelens.app.core.Fmt
 import com.spacelens.app.core.ScanSummary
@@ -27,9 +28,11 @@ class OverviewPage(context: Context) : FrameLayout(context) {
     var onHealth: (() -> Unit)? = null
     var onBench: (() -> Unit)? = null
     var onCategory: ((Int) -> Unit)? = null
+    var onSettings: (() -> Unit)? = null
 
     private val scroll = ScrollView(context)
     private val content = Content(context)
+    private val scanGate = TextView(context)
 
     private var totalBytes = 0L
     private var freeBytes = 0L
@@ -49,6 +52,48 @@ class OverviewPage(context: Context) : FrameLayout(context) {
         scroll.isVerticalScrollBarEnabled = false
         scroll.addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        val settings = TextView(context).apply {
+            text = "设置"
+            textSize = 11f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(Theme.palette.text2)
+            setPadding((10 * resources.displayMetrics.density).toInt(),
+                    (6 * resources.displayMetrics.density).toInt(),
+                    (10 * resources.displayMetrics.density).toInt(),
+                    (6 * resources.displayMetrics.density).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 14 * resources.displayMetrics.density
+                setColor(Theme.alpha(Theme.palette.panel, 220))
+                setStroke(1, Theme.palette.line)
+            }
+            setOnClickListener { onSettings?.invoke() }
+        }
+        val gearLp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+        gearLp.gravity = android.view.Gravity.TOP or android.view.Gravity.END
+        gearLp.topMargin = (12 * resources.displayMetrics.density).toInt()
+        gearLp.rightMargin = (16 * resources.displayMetrics.density).toInt()
+        addView(settings, gearLp)
+        scanGate.apply {
+            text = "需要文件访问权限才能扫描  ·  去设置"
+            textSize = 11f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(Theme.palette.warn)
+            setPadding((12 * resources.displayMetrics.density).toInt(),
+                    (8 * resources.displayMetrics.density).toInt(),
+                    (12 * resources.displayMetrics.density).toInt(),
+                    (8 * resources.displayMetrics.density).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 14 * resources.displayMetrics.density
+                setColor(Theme.alpha(Theme.palette.warn, 26))
+                setStroke(1, Theme.palette.warn)
+            }
+            visibility = View.GONE
+            setOnClickListener { onSettings?.invoke() }
+        }
+        val gateLp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+        gateLp.gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
+        gateLp.bottomMargin = (96 * resources.displayMetrics.density).toInt()
+        addView(scanGate, gateLp)
         refreshStorage()
     }
 
@@ -113,6 +158,14 @@ class OverviewPage(context: Context) : FrameLayout(context) {
             scanAngle = 0f
         }
         content.invalidate()
+    }
+
+    fun showScanPermissionGate() {
+        scanGate.visibility = View.VISIBLE
+    }
+
+    fun hideScanPermissionGate() {
+        scanGate.visibility = View.GONE
     }
 
     fun onShown() {

@@ -768,7 +768,8 @@ class CleanPage(context: Context) : LinearLayout(context) {
         usageGate.visibility = View.GONE
         appSummary.visibility = View.VISIBLE
         appStatus.visibility = View.VISIBLE
-        shizukuCard.visibility = View.VISIBLE
+        shizukuCard.visibility = if (shizuku.state == CacheCleaner.State.AUTHORIZED)
+            View.VISIBLE else View.GONE
         sortRow.visibility = View.VISIBLE
         appList.visibility = View.VISIBLE
     }
@@ -863,6 +864,8 @@ class CleanPage(context: Context) : LinearLayout(context) {
             CacheCleaner.State.NOT_AUTHORIZED -> "请求授权"
             CacheCleaner.State.AUTHORIZED -> "重新检测"
         }
+        shizukuCard.visibility = if (shizuku.state == CacheCleaner.State.AUTHORIZED)
+            View.VISIBLE else View.GONE
         clearCache.isEnabled = shizuku.state == CacheCleaner.State.AUTHORIZED && !clearing
         clearCache.alpha = if (clearCache.isEnabled) 1f else 0.45f
     }

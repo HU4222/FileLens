@@ -157,7 +157,7 @@ class PreviewPage(
     private fun showError(message: String) {
         stage.removeAllViews()
         stage.addView(TextView(context).apply {
-            text = "$message\n${File(paths[index]).name}"
+            text = "$message\n${paths[index]}"
             textSize = 14f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)

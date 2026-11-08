@@ -86,37 +86,22 @@ class TabBar(context: Context) : View(context) {
         Glass.draw(canvas, capsule, radius, dark, density = d)
 
         val iw = itemWidth()
-        val measure = Draw.text(context, 10f, p.text)
-        val lo = progress.toInt().coerceIn(0, labels.size - 1)
-        val hi = (lo + 1).coerceAtMost(labels.size - 1)
-        val frac = (progress - lo).coerceIn(0f, 1f)
-        val widthLo = max(44f * d, measure.measureText(labels[lo]) + 28f * d)
-        val widthHi = max(44f * d, measure.measureText(labels[hi]) + 28f * d)
-        val blockW = widthLo + (widthHi - widthLo) * frac
-        val blockCx = contentLeft() + progress * iw + iw / 2f
-        val block = RectF(blockCx - blockW / 2f, capsule.centerY() - 22f * d,
-                blockCx + blockW / 2f, capsule.centerY() + 22f * d)
-        val blockFill = if (dark) Color.argb(71, 139, 135, 255) else Color.argb(36, 79, 70, 229)
-        canvas.drawRoundRect(block, 20f * d, 20f * d, Draw.fill(blockFill))
-        canvas.drawRoundRect(block, 20f * d, 20f * d,
-                Draw.stroke(Color.argb(56, 255, 255, 255), max(1f, 0.5f * d)))
-
+        val selectedColor = 0xFFB7B4FF.toInt()
+        val selectedText = 0xFFEEF2FF.toInt()
         for (i in labels.indices) {
             val cx = contentLeft() + iw * (i + 0.5f)
             val k = 1f - abs(progress - i).coerceIn(0f, 1f)
             val pressed = pressIndex == i
-            val base = if (pressed) p.text2 else p.muted
-            val color = Theme.blend(base, p.brand, k)
+            val color = Theme.blend(p.muted, selectedColor, k)
+            val textColor = Theme.blend(p.muted, selectedText, k)
+            val size = (18f + 4f * k) * d
+            val stroke = (1.5f + 0.5f * k) * d
             val alpha = if (pressed) (255 * pressAlpha).toInt() else 255
             canvas.save()
             if (pressed) canvas.scale(pressScale, pressScale, cx, capsule.centerY())
-            if (pressed && k < 0.5f) {
-                canvas.drawCircle(cx, capsule.centerY() - 7f * d, 17f * d,
-                        Draw.fill(Theme.alpha(p.brandSoft, 150)))
-            }
             Draw.icon(canvas, icons[i], cx, capsule.top + 22f * d,
-                    20f * d, Theme.alpha(color, alpha), 2f * d)
-            val tp = Draw.text(context, 10f, color, medium = k > 0.5f)
+                    size, Theme.alpha(color, alpha), stroke)
+            val tp = Draw.text(context, 10f, textColor, medium = k > 0.5f)
             tp.alpha = alpha
             val label = labels[i]
             canvas.drawText(label, cx - tp.measureText(label) / 2f,
