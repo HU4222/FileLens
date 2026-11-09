@@ -1,142 +1,197 @@
 # FileLens
 
-一个开源的 Android 文件管理器与空间清理工具。
+**An Android file manager that shows you where your storage actually went — and lets you undo a delete.**
 
-扫一遍全盘，用矩形树图看清「到底是什么占了空间」；按名称、后缀、路径、大小、时间精确找文件；一键找出重复文件与可清理项；删错能撤销、能恢复。还内置一个局域网传输服务——同一个 Wi-Fi 下，电脑用浏览器就能浏览和下载手机里的文件，不上传云端、不经过任何服务器。
+No cloud, no account, no telemetry. Everything stays on the device.
 
-> 仅适用于 Android（minSdk 26 / targetSdk 34）。目前以自用为主，**未在应用商店发布**。
-
----
-
-## 功能
-
-### 空间
-
-- **存储总览**：已用 / 可用 / 已扫描，数字与系统一致
-- **矩形树图**：按真实占用面积铺满屏幕，一眼看出哪个目录最占地方
-- **逐层下钻**：点色块进入子目录，面包屑可跳回任意上级
-- **闪存测速**：顺序读写 + 4K 随机，跑完给出实际速率
-- **存储体检**：给出可清理的建议
-
-### 搜索
-
-- 按**名称**匹配
-- 按**后缀**匹配（输入 `.png` 或 `*.png`）
-- 按**路径**匹配（输入 `DCIM/` 只出该目录下）
-- 按**大小**四档筛选：`<1MB` / `1–10MB` / `>10MB` / `>100MB`
-- 按**时间**三档筛选：7 天内 / 30 天内 / 更早
-- 按名称 / 大小 / 时间排序，一键切换
-- 结果行显示「大小 · 所在目录」，长按可重命名、移动、删除
-
-### 清理
-
-- **重复文件**：按内容比对，找出完全相同的多份
-- **应用占用**：按应用统计空间，可切换「按占用 / 按缓存」排序
-- **垃圾建议**：给出可清理项并标注体积，支持全选
-- 选中后批量删除，**5 秒内可撤销**
-- 未安装 Shizuku 时，需要它的功能整块隐藏，不占位、不误导
-
-### 安全删除
-
-- 所有删除先移入**应用内回收站**，保留原目录结构
-- 删除后底部出现「已移入回收站 · 撤销」，可立即反悔
-- 回收站可逐条恢复，也可彻底删除
-- **30 天自动清理**：超过 30 天的条目自动释放
-- 恢复时若原目录已不存在，**自动重建目录**并放回原位
-
-### 文件操作
-
-- 重命名（拒绝空名、非法字符、重名，不覆盖已有文件）
-- 移动到其他目录（拒绝同名、拒绝把文件夹移进自己的子目录）
-- 新建文件夹
-- 操作后只刷新受影响的部分，不整盘重扫
-
-### 局域网传输
-
-- 手机开一个 HTTP 服务，**默认关闭**，手动开启
-- 显示局域网地址与二维码，扫码或手动输入即可访问
-- 六位配对码，走挑战-应答握手，配对码不在网络上明文传输
-- 电脑浏览器可浏览、下载、上传
-- 本机浏览时自动隐藏「下载」按钮，避免重复下载自己的文件
-- **接收目录可自定义**，并会先探测目录是否可写；不可用则回退到默认目录
-
-### 预览与设置
-
-- 图片预览，超大图自动降采样；无法解码时显示明确提示与完整路径，不黑屏
-- 支持 WebP
-- 预览页内可直接删除、恢复
-- 设置页展示四项系统权限的真实状态，点击直达对应系统页面
-- 崩溃日志本地留存（最多 10 份），**不联网上报**，可手动分享
+> **中文**：FileLens 是一个安卓文件管理与空间清理工具。核心是「看清空间去哪了」和「删错能反悔」——不联网、不要账号、不采集数据。
 
 ---
 
-## 界面
+## What is FileLens
 
-- 手机：底部胶囊导航（高度随屏幕宽度自适应）
-- 平板 / 大屏：自动切换为左侧图标栏 + 右侧详情栏，内容区限宽避免过度拉伸
-- 支持浅色 / 深色主题
+Android tells you "184 GB used" and stops there. FileLens answers the next question: **what is using it**.
+
+It scans the whole device and lays the result out as a **treemap** — every folder is a rectangle, its area proportional to the bytes it holds. You see the answer before you tap anything, then drill down to find the exact culprit.
+
+The second half is about deleting. Every delete goes to an in-app recycle bin first, stays restorable for 30 days, and can be undone within five seconds. Deleting the wrong photo stops being permanent.
+
+> **中文**：系统只告诉你用了 184GB，FileLens 回答「是什么用的」。全盘扫描后用矩形树图铺满屏幕，方块面积等于实际占用，不用点开就能看出谁最占地方，再逐层下钻定位。另一半是删除——所有删除先进应用内回收站，30 天内可恢复，删除后 5 秒内可撤销。
 
 ---
 
-## 权限说明
+## Features
 
-| 权限 | 用途 | 是否必需 |
+| Area | What you get |
+|---|---|
+| **Overview** | Used / free / scanned figures that match the system, plus a treemap of the entire storage |
+| **Drill-down** | Tap a rectangle to enter a folder, breadcrumb jumps back to any level |
+| **Search by name** | Type `report` — matches the file name |
+| **Search by extension** | `.pdf` or `*.pdf` |
+| **Search by path** | `DCIM/` returns only files under that folder |
+| **Filters** | Size (`<1MB` / `1–10MB` / `>10MB` / `>100MB`) and age (7 / 30 days / older), stackable with any search |
+| **Sorting** | Name, size, or modified time — switching keeps your scroll position |
+| **Duplicates** | Groups files with identical content, shows how much space they waste |
+| **App usage** | Space per app, sortable by total size or by cache size |
+| **Cleanup suggestions** | Ready-to-clear items with sizes, select-all supported |
+| **Safe delete** | Everything goes to a recycle bin first, keeping the original folder structure |
+| **Undo** | A five-second undo bar appears after every delete |
+| **Recycle bin** | Restore individually, delete permanently, or let entries expire after 30 days |
+| **Rename / Move** | Renames refuse to overwrite; moving a folder into its own subfolder is rejected |
+| **New folder** | Create a directory in the current location |
+| **LAN transfer** | Serve files to any browser on the same Wi-Fi, no client to install |
+| **Preview** | Images and WebP; undecodable files report the reason and the full path instead of going black |
+| **Speed test** | Sequential and 4K random read/write |
+| **Adaptive layout** | Bottom capsule bar on phones, side rail plus detail pane on tablets |
+
+> **中文**：功能分为空间（总览 + 树图 + 下钻 + 测速）、搜索（名称／后缀／路径 + 大小与时间筛选 + 三种排序）、清理（重复文件／应用占用／垃圾建议）、删除（回收站 + 5 秒撤销 + 30 天自动过期）、文件操作（重命名／移动／新建文件夹）、局域网传输、预览；界面在手机上用底部胶囊导航，平板上自动换成左侧栏 + 右侧详情栏。
+
+---
+
+## Why deletes are different here
+
+Most file managers delete immediately. FileLens does four things instead:
+
+1. **Moves instead of deleting.** The file goes into an in-app recycle bin, preserving its folder structure — a file deleted from `Download/Photos/` stays under `Download/Photos/` inside the bin.
+2. **Undo within 5 seconds.** A bar appears at the bottom; one tap puts it back.
+3. **Restorable for 30 days.** Restore any entry, or delete it permanently to actually free space.
+4. **Rebuilds missing folders.** If the original folder was renamed or removed while the file sat in the bin, restoring it recreates the folder instead of failing — you never "restore" into a path that no longer exists.
+
+Photos in the gallery go through the system delete flow, so other apps see a consistent state.
+
+> **中文**：删除不是销毁，而是移动，并保留原来的目录结构；删完 5 秒内可撤销；30 天内可恢复或彻底删除；如果恢复时原文件夹已经没了，会自动把文件夹建回来再放文件，不会让你恢复到一个不存在的地方。相册照片走系统删除流程，和其它应用保持一致。
+
+---
+
+## LAN transfer
+
+The phone opens a small HTTP service; any browser on the same Wi-Fi can connect. Nothing leaves the local network.
+
+1. Open the **Transfer** tab and start the service (it is **off by default**)
+2. The page shows a LAN address, a QR code, and a 6-digit pairing code
+3. On the PC: open the address, enter the 6 digits
+4. Browse, download, upload
+
+Details worth knowing:
+
+- The 6-digit code is never sent in plaintext — pairing uses a challenge-response handshake
+- The download button is hidden when you browse the phone from the phone itself
+- **The receive folder is configurable**, and is probed for writability before it is accepted; if it becomes unavailable the app falls back to the default folder
+
+> **中文**：传输服务默认关闭，开启后页面上有局域网地址、二维码和 6 位配对码；电脑浏览器打开地址输入配对码即可浏览、下载、上传。配对码不在网络上明文传输（挑战-应答）；手机浏览自己时隐藏下载按钮；接收目录可自定义，选之前先探测可写性，失效时自动回退默认目录。
+
+---
+
+## Permissions
+
+| Permission | Used for | Required |
 |---|---|---|
-| 所有文件访问（MANAGE_EXTERNAL_STORAGE） | 扫描全盘、统计占用、管理文件 | **必需** |
-| 使用情况访问 | 应用占用统计 | 可选 |
-| 通知 | 传输服务运行状态 | 可选 |
-| 相机 | 扫描二维码连接电脑 | 可选 |
+| All files access (`MANAGE_EXTERNAL_STORAGE`) | Scanning, storage stats, file management | **Yes** |
+| Usage access | Per-app storage stats | Optional |
+| Notifications | Transfer service status | Optional |
+| Camera | QR pairing with a PC | Optional |
 
-**没有任何网络权限用于上传数据**；唯一的网络行为是在局域网内提供文件传输服务。
+The app has no internet permission for uploading anything. The only network activity is the LAN transfer service.
+
+> **中文**：必需「所有文件访问」权限，其余三项（使用情况、通知、相机）都可选。应用不会上传任何数据，唯一的网络行为是局域网传输服务。
 
 ---
 
-## 构建
+## Build from source
 
-环境要求：
-
-- JDK 17
-- Android SDK（compileSdk 34、build-tools 34.0.0 或更高）
-- Gradle 8.7（或使用仓库自带的 wrapper）
+Requirements: JDK 17, Android SDK (compileSdk 34, build-tools 34.0.0+), Gradle 8.7.
 
 ```bash
-# 1. 在项目根目录创建 local.properties，指向本机 SDK
+# 1. Point the build at your SDK
 echo "sdk.dir=/path/to/Android/Sdk" > local.properties
 
-# 2. 构建
+# 2. Build
 ./gradlew assembleDebug
 
-# 3. 产物
+# 3. Output
 # app/build/outputs/apk/debug/app-debug.apk
 ```
 
-首次安装后需要手动授予「所有文件访问」权限，否则扫描与删除都不可用。
+After installing, grant **All files access** manually — without it, scanning and deleting do not work.
+
+> **中文**：需要 JDK 17、Android SDK（compileSdk 34）、Gradle 8.7。创建 `local.properties` 指向本机 SDK，`./gradlew assembleDebug` 即可。装完必须手动授予「所有文件访问」，否则扫描和删除都不可用。
 
 ---
 
-## 项目结构
+## Repository layout
 
 ```
 app/src/main/java/com/spacelens/app/
-├── core/            文件扫描、索引、去重、回收站、快照、文件操作
-├── ui/              全部界面（Canvas 自绘）
-├── debug/           仅 Debug 生效的测试脚手架
-├── HttpServer.kt    局域网传输服务
-└── MainActivity.kt  页面装配与业务编排
+├── core/            Scanning, the node index, duplicate detection, trash, snapshots, file ops
+├── ui/              All screens (drawn directly on Canvas)
+├── debug/           Debug-build test hooks (see below)
+├── HttpServer.kt    LAN transfer service
+└── MainActivity.kt  Screen wiring and orchestration
 
-app/src/main/assets/www/   传输页的网页端（浏览器侧界面）
-docs/                      决策记录、回归记录、验证方法
-tools/                     模拟器与自动化验证脚本
+app/src/main/assets/www/   Browser-side UI for the transfer page
+docs/                      Decisions, regression records, verification tooling
+tools/                     Emulator and automation scripts
 ```
+
+**Code comments and commit messages are in Chinese** — this is a single-developer project and Chinese is the working language. The README is in English for GitHub readers.
+
+> **中文**：`core/` 是扫描、索引、去重、回收站、快照与文件操作；`ui/` 是全部界面（Canvas 自绘）；`assets/www/` 是传输页的网页端。**代码注释与提交信息用中文**，README 用英文，方便 GitHub 上的阅读者。
 
 ---
 
-## 说明
+## Debug-only test hooks
 
-- 本项目为个人自用工具，代码按现状提供，不保证在所有机型上表现一致
-- 应用内仅使用 Debug 构建签名，**未做正式签名与上架准备**
-- 传输链路为「握手加密 + 传输明文」，适用于可信局域网，**不要在公共 Wi-Fi 下开启**
+The UI is drawn on Canvas, so standard UI automation cannot see it. The build contains intent extras that let a test harness drive the app directly — `flPage`, `flTap`, `flDumpControls`, `flDumpCounts` — all guarded by `BuildConfig.DEBUG` and absent from a release build.
 
-## 许可
+```bash
+adb shell am start -n com.hu4222.filelens/com.spacelens.app.MainActivity --es flPage clean
+adb shell am start -n com.hu4222.filelens/com.spacelens.app.MainActivity --ez flDumpControls true
+```
 
-MIT License，详见 [LICENSE](LICENSE)。
+See [`docs/EMU-VERIFY.md`](docs/EMU-VERIFY.md) and [`docs/ASSET-EMU-TOOLCHAIN.md`](docs/ASSET-EMU-TOOLCHAIN.md).
+
+> **中文**：界面是 Canvas 自绘，常规 UI 自动化看不到控件，所以 Debug 构建里带了 `flPage` / `flTap` / `flDumpControls` / `flDumpCounts` 四个入口，供测试直接跳页、按 id 触发动作、导出控件位置、导出各模块计数。全部包在 `BuildConfig.DEBUG` 内，Release 不存在。
+
+---
+
+## Documentation
+
+| Document | Language | What's inside |
+|---|---|---|
+| [`FEATURES.md`](FEATURES.md) | 中文 | Feature-only overview, no implementation details |
+| [`docs/PROJECT-BRIEF.md`](docs/PROJECT-BRIEF.md) | 中文 | Full project brief written for external review |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | 中文 | 8 ADRs — what was decided, and what was rejected |
+| [`docs/REGRESSION-RESULT.md`](docs/REGRESSION-RESULT.md) | 中文 | 60-item regression log, with evidence for each item |
+| [`docs/ASSET-DEFECT-PATTERNS.md`](docs/ASSET-DEFECT-PATTERNS.md) | 中文 | 12 reusable defect patterns found during testing |
+| [`docs/EMU-VERIFY.md`](docs/EMU-VERIFY.md) | 中文 | Emulator commands and failure troubleshooting |
+
+> **中文**：`FEATURES.md` 是纯功能说明（给非技术读者）；`docs/` 下有项目说明、8 条决策记录（含否决了哪些方案）、60 项回归记录（含每项证据）、12 条可复用缺陷模式，以及模拟器验证手册。
+
+---
+
+## FAQ
+
+**Why does it need full file access?**
+A file manager that cannot see the whole filesystem cannot tell you what is using your storage. There is no narrower permission that supports a full-disk treemap.
+
+**Does anything leave the device?**
+No. There is no upload path, no analytics, and crash logs stay in local storage.
+
+**Is the transfer encrypted?**
+Pairing is (challenge-response, the code never crosses the wire). File transfer itself is plain HTTP on the LAN. Use it on networks you trust, or on your phone's hotspot.
+
+**Which Android versions?**
+minSdk 26 (Android 8.0). Used daily on Android 14 and Android 16.
+
+**Is there a release APK?**
+Not yet. The app is currently signed with a debug key and has no store listing; build from source.
+
+> **中文**：需要全盘权限是因为没有更窄的权限能支撑全盘树图；不会上传任何数据，崩溃日志只在本地；配对走挑战-应答，文件传输在局域网内是明文，请在可信网络下使用；支持 Android 8.0 及以上，日常在 Android 14/16 上使用；暂未提供正式签名的发布包，请从源码构建。
+
+---
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
+
+> **中文**：MIT 许可证，详见 `LICENSE`。
