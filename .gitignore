@@ -11,3 +11,15 @@ local.properties
 keystore.properties
 .idea/
 *.iml
+
+# 构建产物
+*.apk
+*.aab
+*.zip
+FileLens-*.apk
+
+# 本地截图与临时脚本
+shot-*.png
+.tmp/
+emu_err.log
+build_*.log
